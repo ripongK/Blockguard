@@ -1,0 +1,1834 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BlockGuard — แบบฝึกฝนเทียบเคียง PISA 2025 LDW</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  /* Robust multi-CDN loader for Chart.js. Some school/office networks block
+     individual CDNs (e.g. cdnjs.cloudflare.com); this tries several sources
+     in turn so a single blocked host doesn't take down every graph. */
+  window.__chartJsLoad = new Promise(function (resolve) {
+    var sources = [
+      "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js",
+      "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js",
+      "https://unpkg.com/chart.js@4.4.1/dist/chart.umd.min.js"
+    ];
+    var i = 0;
+    function tryNext() {
+      if (typeof window.Chart !== "undefined") { resolve(true); return; }
+      if (i >= sources.length) { resolve(false); return; }
+      var url = sources[i++];
+      var s = document.createElement("script");
+      s.src = url;
+      s.onload = function () { resolve(typeof window.Chart !== "undefined"); };
+      s.onerror = tryNext;
+      document.head.appendChild(s);
+    }
+    tryNext();
+  });
+</script>
+<style>
+  :root{
+    --bg:#0A0F1C;
+    --bg-grid: rgba(108,140,255,0.045);
+    --panel:#111A2C;
+    --panel-2:#0D1524;
+    --border:#243051;
+    --border-soft:#1A2440;
+    --text:#E7ECF6;
+    --muted:#8C9AC0;
+    --dim:#5B6889;
+    --verify:#2FD98A;
+    --verify-bg:rgba(47,217,138,0.12);
+    --alert:#F5A93B;
+    --alert-bg:rgba(245,169,59,0.12);
+    --mismatch:#E4576B;
+    --mismatch-bg:rgba(228,87,107,0.12);
+    --primary:#6C8CFF;
+    --primary-bg:rgba(108,140,255,0.12);
+    --radius:10px;
+    --radius-sm:6px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(108,140,255,0.10), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 0%, rgba(47,217,138,0.06), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans Thai', sans-serif;
+    line-height:1.6;
+    min-height:100vh;
+    padding:28px 16px 60px;
+  }
+  .mono{font-family:'IBM Plex Mono', monospace;}
+  #app{max-width:840px; margin:0 auto;}
+
+  /* ---------- Top identity bar ---------- */
+  .idbar{
+    display:none;
+    justify-content:space-between;
+    align-items:center;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:12px 18px;
+    margin-bottom:18px;
+    font-size:14px;
+  }
+  .idbar.show{display:flex;}
+  .idbar .who{color:var(--text); font-weight:600;}
+  .idbar .grade{color:var(--muted);}
+  .idbar .badge{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--primary);
+    background:var(--primary-bg);
+    border:1px solid rgba(108,140,255,0.35);
+    padding:3px 9px;
+    border-radius:100px;
+  }
+
+  /* ---------- Chain progress ---------- */
+  .chainbar{
+    display:none;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:26px;
+    padding:0 4px;
+  }
+  .chainbar.show{display:flex;}
+  .chain-node{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+    flex:0 0 auto;
+  }
+  .chain-node .dot{
+    width:38px; height:38px;
+    border-radius:9px;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; font-weight:700;
+    background:var(--panel-2);
+    border:1.5px solid var(--border);
+    color:var(--dim);
+    transition:all .25s ease;
+  }
+  .chain-node .lbl{font-size:11px; color:var(--dim); letter-spacing:.02em;}
+  .chain-node.active .dot{border-color:var(--primary); color:var(--primary); background:var(--primary-bg); box-shadow:0 0 0 4px rgba(108,140,255,0.10);}
+  .chain-node.active .lbl{color:var(--text); font-weight:600;}
+  .chain-node.done .dot{border-color:var(--verify); color:var(--verify); background:var(--verify-bg);}
+  .chain-node.done .lbl{color:var(--muted);}
+  .chain-link{
+    flex:1 1 auto;
+    height:1px;
+    background:linear-gradient(90deg, var(--border-soft), var(--border-soft));
+    margin:0 6px;
+    position:relative;
+    top:-10px;
+  }
+  .chain-link .hx{
+    position:absolute; top:-9px; left:50%; transform:translateX(-50%);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:9px; color:var(--dim);
+    background:var(--bg);
+    padding:0 4px;
+    white-space:nowrap;
+  }
+
+  /* ---------- Cards / panels ---------- */
+  .card{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:24px;
+    margin-bottom:16px;
+  }
+  .card.tight{padding:18px;}
+  .eyebrow-tag{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px;
+    color:var(--primary);
+    background:var(--primary-bg);
+    border:1px solid rgba(108,140,255,0.3);
+    padding:4px 10px;
+    border-radius:100px;
+    margin-bottom:14px;
+  }
+  h1{font-size:26px; font-weight:700; margin:0 0 8px; letter-spacing:-0.01em;}
+  h2{font-size:20px; font-weight:700; margin:0 0 10px; letter-spacing:-0.01em;}
+  h3{font-size:16px; font-weight:600; margin:0 0 8px;}
+  p{color:var(--muted); margin:0 0 12px;}
+  .lead{color:var(--text); font-size:15px;}
+
+  /* ---------- Intro screen ---------- */
+  .hero-chain{
+    display:flex; align-items:center; gap:4px; margin-bottom:22px; flex-wrap:wrap;
+  }
+  .hero-block{
+    font-family:'IBM Plex Mono', monospace; font-size:12px;
+    border:1px solid var(--border); border-radius:6px;
+    padding:8px 12px; color:var(--muted); background:var(--panel-2);
+  }
+  .hero-block b{color:var(--text);}
+  .hero-arrow{color:var(--dim); font-family:'IBM Plex Mono', monospace; font-size:12px;}
+
+  label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px; font-weight:500;}
+  input[type=text], select{
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:var(--radius-sm);
+    padding:11px 13px;
+    font-size:14.5px;
+    font-family:inherit;
+    margin-bottom:16px;
+  }
+  input[type=text]:focus, select:focus{outline:2px solid var(--primary); outline-offset:1px; border-color:var(--primary);}
+
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    background:var(--primary);
+    color:#0A0F1C;
+    border:none;
+    padding:12px 22px;
+    font-size:14.5px;
+    font-weight:700;
+    border-radius:var(--radius-sm);
+    cursor:pointer;
+    font-family:inherit;
+    transition:filter .15s ease, transform .1s ease;
+  }
+  .btn:hover{filter:brightness(1.08);}
+  .btn:active{transform:scale(0.98);}
+  .btn:disabled{opacity:.4; cursor:not-allowed;}
+  .btn.secondary{background:transparent; color:var(--text); border:1px solid var(--border);}
+  .btn.secondary:hover{border-color:var(--primary); color:var(--primary);}
+  .btnrow{display:flex; justify-content:space-between; align-items:center; margin-top:20px; gap:10px;}
+  .btnrow .spacer{flex:1;}
+
+  /* ---------- Questions ---------- */
+  .qcount{font-size:12.5px; color:var(--dim); font-family:'IBM Plex Mono', monospace; margin-bottom:10px;}
+  .qtext{font-size:16px; color:var(--text); margin-bottom:16px; font-weight:600;}
+  .choice{
+    display:flex; align-items:flex-start; gap:11px;
+    border:1px solid var(--border);
+    border-radius:var(--radius-sm);
+    padding:12px 14px;
+    margin-bottom:9px;
+    cursor:pointer;
+    background:var(--panel-2);
+    transition:border-color .12s ease, background .12s ease;
+  }
+  .choice:hover{border-color:var(--primary);}
+  .choice.selected{border-color:var(--primary); background:var(--primary-bg);}
+  .choice .radio{
+    width:17px; height:17px; border-radius:50%;
+    border:1.5px solid var(--dim); flex:0 0 auto; margin-top:2px;
+    position:relative;
+  }
+  .choice.selected .radio{border-color:var(--primary);}
+  .choice.selected .radio::after{
+    content:''; position:absolute; inset:3px; border-radius:50%; background:var(--primary);
+  }
+  .choice .ctext{font-size:14.5px; color:var(--text);}
+
+  /* ---------- Chart wrap ---------- */
+  .chartwrap{
+    background:var(--panel-2);
+    border:1px solid var(--border-soft);
+    border-radius:var(--radius-sm);
+    padding:16px 12px 8px;
+    margin:14px 0 18px;
+    height:260px;
+  }
+  .lesson-box{
+    background:var(--panel-2);
+    border-left:2.5px solid var(--primary);
+    border-radius:0 var(--radius-sm) var(--radius-sm) 0;
+    padding:14px 16px;
+    margin-bottom:16px;
+    font-size:14px;
+    color:var(--text);
+  }
+
+  /* ---------- Status pills ---------- */
+  .pill{
+    display:inline-flex; align-items:center; gap:5px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px; font-weight:600;
+    padding:3px 9px; border-radius:100px;
+  }
+  .pill.ok{color:var(--verify); background:var(--verify-bg);}
+  .pill.bad{color:var(--mismatch); background:var(--mismatch-bg);}
+  .pill.warn{color:var(--alert); background:var(--alert-bg);}
+
+  /* ---------- Apply controls ---------- */
+  .slider-row{margin-bottom:16px;}
+  .slider-row .sr-top{display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px;}
+  .slider-row .sr-top .sname{color:var(--text); font-weight:500;}
+  .slider-row .sr-top .sval{color:var(--primary); font-family:'IBM Plex Mono', monospace; font-weight:600;}
+  input[type=range]{
+    width:100%; -webkit-appearance:none; appearance:none;
+    height:5px; border-radius:4px; background:var(--border);
+    outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:17px; height:17px; border-radius:50%;
+    background:var(--primary); cursor:pointer; border:2px solid #0A0F1C;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:17px; height:17px; border-radius:50%;
+    background:var(--primary); cursor:pointer; border:2px solid #0A0F1C;
+  }
+  .accuracy-banner{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--panel-2); border:1px solid var(--border-soft);
+    border-radius:var(--radius-sm); padding:12px 16px; margin:14px 0;
+  }
+  .accuracy-banner .acc-label{font-size:13px; color:var(--muted);}
+  .accuracy-banner .acc-value{font-family:'IBM Plex Mono', monospace; font-size:20px; font-weight:700;}
+  .acc-value.full{color:var(--verify);}
+  .acc-value.partial{color:var(--alert);}
+  .acc-value.low{color:var(--mismatch);}
+
+  table.blocktbl{width:100%; border-collapse:collapse; font-size:13px; margin-bottom:14px;}
+  table.blocktbl th, table.blocktbl td{
+    border:1px solid var(--border-soft); padding:8px 10px; text-align:left;
+  }
+  table.blocktbl th{color:var(--muted); font-weight:600; background:var(--panel-2); font-size:12px;}
+  table.blocktbl td{color:var(--text); font-family:'IBM Plex Mono', monospace; font-size:12.5px;}
+  .num-input{
+    width:90px; background:var(--panel); border:1px solid var(--primary);
+    color:var(--primary); font-family:'IBM Plex Mono', monospace; font-weight:700;
+    border-radius:6px; padding:6px 8px; font-size:13px;
+  }
+
+  textarea{
+    width:100%; background:var(--panel-2); border:1px solid var(--border);
+    color:var(--text); border-radius:var(--radius-sm); padding:12px 13px;
+    font-family:inherit; font-size:14px; min-height:88px; resize:vertical;
+    margin-bottom:16px;
+  }
+  textarea:focus{outline:2px solid var(--primary); outline-offset:1px; border-color:var(--primary);}
+
+  .likert-row{margin-bottom:20px;}
+  .likert-q{font-size:14.5px; color:var(--text); margin-bottom:10px; font-weight:500;}
+  .likert-opts{display:flex; gap:8px; flex-wrap:wrap;}
+  .likert-opt{
+    flex:1 1 100px; text-align:center; border:1px solid var(--border);
+    border-radius:var(--radius-sm); padding:10px 6px; cursor:pointer;
+    font-size:12.5px; color:var(--muted); background:var(--panel-2);
+  }
+  .likert-opt.selected{border-color:var(--primary); color:var(--primary); background:var(--primary-bg); font-weight:600;}
+
+  /* ---------- Report ---------- */
+  .score-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:18px;}
+  .score-card{
+    background:var(--panel-2); border:1px solid var(--border-soft);
+    border-radius:var(--radius-sm); padding:16px;
+  }
+  .score-card .sc-name{font-size:12px; color:var(--muted); margin-bottom:6px; font-family:'IBM Plex Mono', monospace;}
+  .score-card .sc-val{font-size:26px; font-weight:700; font-family:'IBM Plex Mono', monospace;}
+  .level-banner{
+    text-align:center; padding:26px 16px; border-radius:var(--radius);
+    margin-bottom:18px; border:1px solid var(--border);
+  }
+  .level-banner .lv-num{font-size:44px; font-weight:700; font-family:'IBM Plex Mono', monospace; line-height:1;}
+  .level-banner .lv-name{font-size:15px; margin-top:6px; color:var(--muted);}
+  .hist-table{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px;}
+  .hist-table th, .hist-table td{border:1px solid var(--border-soft); padding:7px 8px; text-align:left;}
+  .hist-table th{background:var(--panel-2); color:var(--muted); font-weight:600;}
+  .hist-table td{color:var(--muted);}
+  .save-status{font-size:12.5px; margin-top:10px; color:var(--dim); font-family:'IBM Plex Mono', monospace;}
+
+
+  /* ---------- Drag-and-drop builder ---------- */
+  .drag-stage{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:12px;}
+  .drag-palette, .drag-script{
+    background:var(--panel-2); border:1px dashed var(--border);
+    border-radius:var(--radius-sm); padding:12px; min-height:120px;
+  }
+  .drag-col-label{font-size:12px; color:var(--muted); margin-bottom:10px; font-weight:600;}
+  .drag-block{
+    border-radius:6px; padding:9px 11px; margin-bottom:8px; cursor:grab;
+    font-size:13px; line-height:1.45; color:#0A0F1C; font-weight:500;
+    border:1px solid rgba(0,0,0,0.18); user-select:none;
+    touch-action:none; -webkit-user-select:none;
+  }
+  .drag-block:active{cursor:grabbing;}
+  .drag-ghost{
+    position:fixed; z-index:9999; pointer-events:none; opacity:.9;
+    box-shadow:0 8px 24px rgba(0,0,0,0.45); margin:0;
+  }
+  .drag-palette.over{border-color:var(--primary); background:var(--primary-bg);}
+  .drag-block.dragging{opacity:.45;}
+  .drag-block.in-slot{margin-bottom:0;}
+  .shape-hat{background:#F5A93B; border-top-left-radius:16px; border-top-right-radius:16px;}
+  .shape-ctrl{background:#F0A23C; background:#E8A33E;}
+  .shape-cmd{background:#6C8CFF;}
+  .shape-start, .shape-end{background:#2FD98A; border-radius:100px;}
+  .shape-process{background:#6C8CFF;}
+  .shape-decision{background:#F5A93B; border-radius:4px;
+    clip-path:polygon(4% 50%, 12% 0%, 88% 0%, 96% 50%, 88% 100%, 12% 100%);
+    padding:9px 26px; text-align:center;}
+  .drag-slot{
+    display:flex; align-items:center; gap:9px;
+    border:1px dashed var(--border-soft); border-radius:6px;
+    padding:7px 9px; background:rgba(255,255,255,0.015); min-height:44px;
+  }
+  .drag-slot.filled{border-style:solid; border-color:var(--border); background:transparent;}
+  .drag-slot.over{border-color:var(--primary); background:var(--primary-bg);}
+  .drag-slot .slot-num{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--dim);
+    flex:0 0 auto; width:16px; text-align:center;
+  }
+  .drag-slot .slot-inner{flex:1 1 auto; min-width:0;}
+  .drag-slot .slot-hint{font-size:12px; color:var(--dim);}
+  .drag-arrow{text-align:center; color:var(--dim); font-size:13px; line-height:1; margin:3px 0;}
+  .drag-status{font-size:12.5px; color:var(--muted); margin-top:12px; font-family:'IBM Plex Mono', monospace;}
+  .drag-empty-note{font-size:12px; color:var(--dim); line-height:1.5;}
+
+  @media (max-width:640px){
+    .drag-stage{grid-template-columns:1fr;}
+  }
+
+  @media (max-width:560px){
+    .chain-node .lbl{display:none;}
+    .score-grid{grid-template-columns:1fr;}
+    .idbar{flex-direction:column; align-items:flex-start; gap:6px;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="idbar" id="idbar">
+    <div><span class="who" id="idbar-name"></span> · <span class="grade" id="idbar-grade"></span></div>
+    <div class="badge mono" id="idbar-stage">SHOW</div>
+  </div>
+  <div class="chainbar" id="chainbar"></div>
+  <div id="screen"></div>
+</div>
+<script>
+/* =========================================================
+   BlockGuard — PISA 2025 LDW practice test
+   ========================================================= */
+const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwj6yK7LCtTc_90VHpl2GndYSnYGgUA-B94dksZIxwk_Q9ZVcNx8cnEL2yJ8k3QvBjs/exec";
+
+const GRADES = ["มัธยมศึกษาปีที่ 2","มัธยมศึกษาปีที่ 3","มัธยมศึกษาปีที่ 4","ปวช."];
+
+/* ---------- SHOW: 5 items, 4 choices ---------- */
+const SHOW_Q = [
+  {
+    q: "ระบบบล็อกเชนจำลองในสถานการณ์นี้ เก็บข้อมูลธุรกรรมอย่างไร",
+    choices: [
+      "เก็บเป็นบล็อกอิสระที่ไม่เกี่ยวข้องกัน",
+      "เก็บเป็นบล็อกที่เชื่อมโยงต่อกันเป็นสายโซ่ตามลำดับ",
+      "เก็บเป็นไฟล์เดียวรวมทุกธุรกรรม",
+      "เก็บเฉพาะธุรกรรมล่าสุดเพียงบล็อกเดียว"
+    ], correct: 1
+  },
+  {
+    q: "Hash ในระบบจำลองนี้มีหน้าที่หลักอย่างไร",
+    choices: [
+      "เข้ารหัสข้อมูลเพื่อไม่ให้ผู้อื่นอ่านได้",
+      "เป็นค่าที่ใช้ยืนยันว่าเนื้อหาของบล็อกไม่ถูกเปลี่ยนแปลง",
+      "บอกจำนวนเงินในธุรกรรม",
+      "กำหนดลำดับเวลาที่บล็อกถูกสร้าง"
+    ], correct: 1
+  },
+  {
+    q: "\"ข้อมูลไม่สอดคล้อง\" ตามนิยามที่กำหนด หมายถึงข้อใด",
+    choices: [
+      "Hash ของบล็อกก่อนหน้า ตรงกับ Previous Hash ของบล็อกปัจจุบัน",
+      "Transaction Data ของสองบล็อกเหมือนกัน",
+      "Hash ของบล็อกก่อนหน้า ไม่ตรงกับ Previous Hash ของบล็อกปัจจุบัน",
+      "บล็อกปัจจุบันไม่มี Block ID"
+    ], correct: 2
+  },
+  {
+    q: "จากตาราง: B1 (Previous Hash —, Current Hash H100), B2 (Previous Hash H100, Current Hash H200), B3 (Previous Hash H999, Current Hash H300) — บล็อกใดคือ \"บล็อกที่ต้องตรวจสอบ\"",
+    choices: ["B1","B2","B3","ไม่มีบล็อกใดต้องตรวจสอบ"], correct: 2
+  },
+  {
+    q: "BlockBot ทำงานตามลำดับขั้นตอนใดจึงจะถูกต้อง",
+    choices: [
+      "คำนวณ Hash → อ่านข้อมูล Block → ตรวจ Previous Hash → เปรียบเทียบ Hash → ตรวจความถูกต้อง → รายงานผล",
+      "อ่านข้อมูล Block → คำนวณ Hash → ตรวจ Previous Hash → เปรียบเทียบ Hash → ตรวจความถูกต้อง → รายงานผล",
+      "อ่านข้อมูล Block → ตรวจความถูกต้อง → คำนวณ Hash → เปรียบเทียบ Hash → ตรวจ Previous Hash → รายงานผล",
+      "รายงานผล → อ่านข้อมูล Block → คำนวณ Hash → ตรวจ Previous Hash → เปรียบเทียบ Hash → ตรวจความถูกต้อง"
+    ], correct: 1
+  }
+];
+
+/* ---------- Shared reference chain used across LEARN ---------- */
+const CHAIN = [
+  {id:"B1", data:"A ส่งเงิน 500 ให้ B", prev:null, cur:100},
+  {id:"B2", data:"B ส่งเงิน 300 ให้ C", prev:100, cur:200},
+  {id:"B3", data:"C ส่งเงิน 700 ให้ D", prev:999, cur:300},
+  {id:"B4", data:"D ส่งเงิน 250 ให้ E", prev:300, cur:400},
+  {id:"B5", data:"E ส่งเงิน 150 ให้ F", prev:450, cur:500}
+];
+
+/* ---------- LEARN: 5 tasks, chart + 2 questions each ---------- */
+const LEARN_TASKS = [
+  {
+    title: "ภาระงานที่ 1 · ทำความรู้จัก Hash ของบล็อก",
+    lesson: "Current Hash คือค่าที่คำนวณจากเนื้อหาภายในบล็อกนั้น เปรียบเสมือนลายนิ้วมือดิจิทัลของบล็อก ในระบบจำลองนี้แสดงเป็นรหัสอย่างง่าย เช่น H100, H200 ... กราฟด้านล่างแสดงค่าตัวเลขของ Current Hash (ตัดตัวอักษร H ออกเพื่อให้อ่านง่าย) ของบล็อก B1–B5 ตามลำดับการสร้าง",
+    chart: {type:"line", labels:["B1","B2","B3","B4","B5"],
+      datasets:[{label:"Current Hash (ค่าตัวเลข)", data:[100,200,300,400,500], borderColor:"#6C8CFF", backgroundColor:"rgba(108,140,255,0.15)", tension:0.25, fill:true}]},
+    questions: [
+      {q:"Current Hash ของบล็อกหนึ่ง ๆ ถูกคำนวณมาจากอะไร",
+       choices:["วันที่สร้างบล็อกเท่านั้น","เนื้อหาของบล็อกนั้น (เช่น Transaction Data)","ชื่อผู้ดูแลระบบ","จำนวนบล็อกทั้งหมดในสายโซ่"], correct:1},
+      {q:"จากกราฟ B1–B5 ข้อใดสรุปเกี่ยวกับ Current Hash ได้ถูกต้อง",
+       choices:["บล็อกที่สร้างทีหลังจะมี Current Hash เท่ากับบล็อกก่อนหน้าเสมอ","แต่ละบล็อกมีค่า Current Hash เฉพาะตัว ไม่ซ้ำกัน","ค่า Current Hash จะลดลงเมื่อบล็อกใหม่ถูกสร้าง","กราฟนี้แสดงจำนวนธุรกรรมในแต่ละบล็อก"], correct:1}
+    ]
+  },
+  {
+    title: "ภาระงานที่ 2 · ตรวจสอบความสอดคล้องของ Hash",
+    lesson: "การตรวจสอบทำโดยเทียบ Previous Hash ของบล็อกปัจจุบัน กับ Hash ของบล็อกก่อนหน้า ผลการตรวจสอบของแต่ละบล็อกแสดงเป็นสถานะ ถูกต้อง หรือ ไม่ถูกต้อง กราฟแท่งด้านล่างสรุปผลของ B2–B5 ในสายโซ่ตัวอย่าง (1 = ถูกต้อง, 0 = ไม่ถูกต้อง)",
+    chart: {type:"bar", labels:["B2","B3","B4","B5"],
+      datasets:[{label:"สถานะการตรวจสอบ", data:[1,0,1,0], backgroundColor:["#2FD98A","#E4576B","#2FD98A","#E4576B"]}]},
+    questions: [
+      {q:"จากกราฟ บล็อกใดมีสถานะ \"ไม่ถูกต้อง\"",
+       choices:["B2 และ B4","B3 และ B5","B2 เท่านั้น","ทุกบล็อกถูกต้อง"], correct:1},
+      {q:"บล็อกที่มีสถานะไม่ถูกต้อง ควรจัดอยู่ในกลุ่มใดตามนิยามที่กำหนด",
+       choices:["บล็อกที่ต้องตรวจสอบ","บล็อก Genesis","บล็อกสำรอง","บล็อกที่ถูกลบ"], correct:0}
+    ]
+  },
+  {
+    title: "ภาระงานที่ 3 · ผลกระทบแบบ Avalanche",
+    lesson: "หากเปลี่ยนแปลง Transaction Data เพียงเล็กน้อย เช่น จำนวนเงินจาก 500 เป็น 501 ค่า Hash ที่คำนวณใหม่จะแตกต่างจากเดิมโดยสิ้นเชิง คุณสมบัตินี้เรียกว่า Avalanche Effect ทำให้ BlockGuard ตรวจจับการปลอมแปลงข้อมูลได้ง่าย แม้จะเป็นการเปลี่ยนแปลงเพียงเล็กน้อยก็ตาม",
+    chart: {type:"bar", labels:["ข้อมูลที่เปลี่ยนแปลง (%)","ความแตกต่างของ Hash (%)"],
+      datasets:[{label:"เปรียบเทียบผลกระทบ", data:[2,97], backgroundColor:["#6C8CFF","#F5A93B"]}]},
+    questions: [
+      {q:"จากกราฟ แม้ข้อมูลธุรกรรมเปลี่ยนไปเพียง 2% เหตุใดค่า Hash จึงเปลี่ยนไปเกือบ 100%",
+       choices:["เพราะระบบสุ่มค่า Hash ใหม่ทุกครั้งโดยไม่เกี่ยวกับข้อมูล","เพราะฟังก์ชัน Hash ถูกออกแบบให้ไวต่อการเปลี่ยนแปลงแม้เพียงเล็กน้อย (Avalanche Effect)","เพราะข้อมูลที่เปลี่ยนมีขนาดใหญ่กว่าเดิมมาก","เพราะบล็อกก่อนหน้าถูกลบไปแล้ว"], correct:1},
+      {q:"คุณสมบัติ Avalanche Effect มีประโยชน์ต่อ BlockGuard อย่างไร",
+       choices:["ทำให้ประมวลผลเร็วขึ้น","ทำให้ตรวจจับการปลอมแปลงข้อมูลแม้เพียงเล็กน้อยได้ง่ายขึ้น","ทำให้ขนาดไฟล์เล็กลง","ทำให้ไม่ต้องเก็บ Previous Hash อีกต่อไป"], correct:1}
+    ]
+  },
+  {
+    title: "ภาระงานที่ 4 · แนวโน้มบล็อกที่ต้องตรวจสอบรายวัน",
+    lesson: "BlockGuard บันทึกจำนวนบล็อกที่ต้องตรวจสอบ (พบข้อมูลไม่สอดคล้อง) ในแต่ละวัน การดูแนวโน้มช่วยให้ทีมความปลอดภัยสังเกตความผิดปกติที่พุ่งสูงกว่าปกติได้",
+    chart: {type:"bar", labels:["จ.","อ.","พ.","พฤ.","ศ.","ส.","อา."],
+      datasets:[{label:"จำนวนบล็อกที่ต้องตรวจสอบ", data:[1,0,2,1,4,0,1], backgroundColor:"#6C8CFF"}]},
+    questions: [
+      {q:"วันใดพบจำนวนบล็อกที่ต้องตรวจสอบสูงที่สุด",
+       choices:["จันทร์","พุธ","ศุกร์","อาทิตย์"], correct:2},
+      {q:"หากวันศุกร์มีบล็อกที่ต้องตรวจสอบสูงผิดปกติเมื่อเทียบกับวันอื่น ทีมดูแลระบบควรทำสิ่งใดเป็นลำดับแรก",
+       choices:["ลบข้อมูลบล็อกที่ผิดปกติทิ้งทันที","เพิกเฉยเพราะเป็นเพียงข้อมูลจำลอง","ตรวจสอบสาเหตุและบล็อกที่เกี่ยวข้องเพิ่มเติมก่อนตัดสินใจ","ปิดระบบ BlockGuard ทันที"], correct:2}
+    ]
+  },
+  {
+    title: "ภาระงานที่ 5 · เปรียบเทียบ Hash ของบล็อกก่อนหน้า กับ Previous Hash ที่บันทึกไว้",
+    lesson: "กราฟเส้นคู่นี้เปรียบเทียบ (1) Hash ของบล็อกก่อนหน้า คือค่า Current Hash จริงของบล็อกก่อนหน้า กับ (2) Previous Hash ของบล็อกปัจจุบัน คือค่าที่บล็อกปัจจุบันบันทึกไว้ว่าต่อจากบล็อกใด ถ้าเส้นทั้งสองตรงกัน = ข้อมูลสอดคล้อง (ถูกต้อง) ถ้าเส้นแยกออกจากกัน = ข้อมูลไม่สอดคล้อง (ไม่ถูกต้อง)",
+    chart: {type:"line", labels:["B2","B3","B4","B5"],
+      datasets:[
+        {label:"Hash ของบล็อกก่อนหน้า", data:[100,200,300,400], borderColor:"#2FD98A", backgroundColor:"transparent", tension:0.15},
+        {label:"Previous Hash ของบล็อกปัจจุบัน", data:[100,999,300,450], borderColor:"#E4576B", backgroundColor:"transparent", tension:0.15, borderDash:[5,4]}
+      ]},
+    questions: [
+      {q:"จากกราฟ เส้นทั้งสองแยกออกจากกันที่บล็อกใดบ้าง",
+       choices:["B2 และ B4","B3 และ B5","B2 เท่านั้น","ไม่มีบล็อกใดที่เส้นแยกออกจากกัน"], correct:1},
+      {q:"บล็อกที่เส้นทั้งสองแยกออกจากกัน ควรถูกจัดสถานะอย่างไร",
+       choices:["สถานะ: ถูกต้อง","สถานะ: ไม่ถูกต้อง และเป็นบล็อกที่ต้องตรวจสอบ","บล็อก Genesis","ไม่ต้องดำเนินการใด ๆ"], correct:1}
+    ]
+  },
+  {
+    title: "ภาระงานที่ 6 · Smart Contract คืออะไร",
+    lesson: "Smart Contract (สัญญาอัจฉริยะ) คือโปรแกรมที่บันทึกไว้บนบล็อกเชนจำลอง ทำงานตามเงื่อนไขที่เขียนไว้ล่วงหน้าโดยไม่ต้องมีคนกลางคอยดำเนินการ และเมื่อบันทึกแล้วจะแก้ไขย้อนหลังไม่ได้ (หากแก้ Hash จะเปลี่ยนและ BlockGuard ตรวจพบ) กราฟเปรียบเทียบเวลาที่ใช้ในแต่ละขั้นตอนระหว่างสัญญาแบบเดิมที่ใช้คนดำเนินการ กับ Smart Contract (ข้อมูลจำลอง)",
+    chart: {type:"bar", labels:["ตรวจเอกสาร","ยืนยันเงื่อนไข","โอนสิทธิ์/เงิน","แจ้งผล"],
+      datasets:[
+        {label:"สัญญาแบบเดิม (ชั่วโมง)", data:[24,48,72,12], backgroundColor:"#F5A93B"},
+        {label:"Smart Contract (ชั่วโมง)", data:[1,1,2,1], backgroundColor:"#2FD98A"}
+      ]},
+    questions: [
+      {q:"Smart Contract ทำงานอย่างไร",
+       choices:["รอให้เจ้าหน้าที่กดอนุมัติทุกขั้นตอน","ทำงานโดยอัตโนมัติเมื่อเงื่อนไขที่เขียนไว้ล่วงหน้าครบถ้วน","ทำงานเมื่อผู้ใช้ร้องขอเท่านั้น ไม่ว่าเงื่อนไขจะครบหรือไม่","สุ่มผลลัพธ์ในแต่ละครั้ง"], correct:1},
+      {q:"จากกราฟ ข้อใดสรุปได้ถูกต้อง",
+       choices:["สัญญาแบบเดิมใช้เวลามากที่สุดในขั้นตอน \"แจ้งผล\"","Smart Contract ใช้เวลามากกว่าสัญญาแบบเดิมในทุกขั้นตอน","สัญญาแบบเดิมใช้เวลามากที่สุดในขั้นตอน \"โอนสิทธิ์/เงิน\" และ Smart Contract ลดเวลาลงมากในทุกขั้นตอน","ทั้งสองแบบใช้เวลาเท่ากัน"], correct:2}
+    ]
+  },
+  {
+    title: "ภาระงานที่ 7 · ระบบ VOTE บนบล็อกเชน",
+    lesson: "ในระบบ VOTE จำลอง แต่ละกระเป๋าดิจิทัลลงคะแนนได้ 1 ครั้ง Smart Contract จะตรวจและปฏิเสธคะแนนซ้ำโดยอัตโนมัติ คะแนนที่ถูกต้องแต่ละครั้งถูกบันทึกเป็นบล็อกเชื่อมกันด้วย Hash จึงแก้ไขย้อนหลังโดยไม่ถูกตรวจพบไม่ได้ กราฟแสดงคะแนนที่ถูกนับ และคะแนนซ้ำที่ถูกปฏิเสธของแต่ละตัวเลือก",
+    chart: {type:"bar", labels:["ตัวเลือก A","ตัวเลือก B","ตัวเลือก C","ตัวเลือก D"],
+      datasets:[
+        {label:"คะแนนที่ถูกนับ", data:[42,35,28,15], backgroundColor:"#6C8CFF"},
+        {label:"คะแนนซ้ำที่ถูกปฏิเสธ", data:[3,5,2,1], backgroundColor:"#E4576B"}
+      ]},
+    drag: {
+      mode:"scratch",
+      title:"สร้างสคริปต์ Smart Contract ของระบบ VOTE",
+      prompt:"ลากบล็อกคำสั่งจากกล่องด้านซ้าย ไปวางในช่องสคริปต์ด้านขวาให้เรียงตามลำดับการทำงานที่ถูกต้อง (บนแท็บเล็ตหรือมือถือ ใช้วิธีแตะบล็อกเพื่อวาง และแตะบล็อกในสคริปต์เพื่อนำออก) มีบล็อกที่ไม่ได้ใช้ปะปนอยู่ด้วย",
+      slots:6,
+      blocks:[
+        {id:"v_reject", text:"ปฏิเสธคะแนน และแจ้งว่า \"ลงคะแนนซ้ำ\"", shape:"cmd", indent:1},
+        {id:"v_edit",   text:"แก้ไขคะแนนของบล็อกเก่าย้อนหลัง", shape:"cmd", indent:0},
+        {id:"v_hat",    text:"เมื่อ ได้รับคะแนนโหวตจากกระเป๋าดิจิทัล", shape:"hat", indent:0},
+        {id:"v_else",   text:"มิฉะนั้น", shape:"ctrl", indent:0},
+        {id:"v_total",  text:"แสดงผลคะแนนรวมของทุกตัวเลือก", shape:"cmd", indent:0},
+        {id:"v_if",     text:"ถ้า กระเป๋าดิจิทัลนี้เคยลงคะแนนแล้ว", shape:"ctrl", indent:0},
+        {id:"v_del",    text:"ลบบล็อกคะแนนก่อนหน้าทิ้ง", shape:"cmd", indent:0},
+        {id:"v_save",   text:"บันทึกคะแนนเป็นบล็อกใหม่ และเชื่อม Hash กับบล็อกก่อนหน้า", shape:"cmd", indent:1}
+      ],
+      answer:["v_hat","v_if","v_reject","v_else","v_save","v_total"]
+    },
+    questions: [
+      {q:"เหตุใด Smart Contract ของระบบ VOTE จึงปฏิเสธคะแนนซ้ำจากกระเป๋าดิจิทัลเดิมได้เอง",
+       choices:["เพราะเงื่อนไขกำหนดว่า 1 กระเป๋าลงคะแนนได้ 1 ครั้ง สัญญาจึงตรวจและปฏิเสธเองโดยอัตโนมัติ","เพราะผู้ดูแลระบบเลือกปฏิเสธด้วยตนเองทุกครั้ง","เพราะคะแนนซ้ำทำให้ Hash ของบล็อกก่อนหน้าหายไป","เพราะตัวเลือก A ต้องได้คะแนนสูงที่สุดเสมอ"], correct:0}
+    ]
+  },
+  {
+    title: "ภาระงานที่ 8 · หลักการทำงานแบบ If-Then",
+    lesson: "Smart Contract ทำงานตามหลัก If-Then: สัญญาจะทำงานโดยอัตโนมัติเมื่อเงื่อนไขที่กำหนดไว้ล่วงหน้าครบถ้วน เช่น ถ้า (If) ส่งเงินครบตามกำหนด แล้ว (Then) ระบบจะโอนกรรมสิทธิ์บ้านให้ทันที กราฟแสดงยอดชำระสะสม (ล้านบาท) เทียบกับยอดที่สัญญากำหนด (2.4 ล้านบาท) ในแต่ละเดือน (ข้อมูลจำลอง)",
+    chart: {type:"line", labels:["เดือน 1","เดือน 2","เดือน 3","เดือน 4","เดือน 5","เดือน 6"],
+      datasets:[
+        {label:"ยอดชำระสะสม (ล้านบาท)", data:[0.4,0.8,1.2,1.6,2.0,2.4], borderColor:"#6C8CFF", backgroundColor:"transparent", tension:0.1},
+        {label:"ยอดที่สัญญากำหนด (ล้านบาท)", data:[2.4,2.4,2.4,2.4,2.4,2.4], borderColor:"#F5A93B", backgroundColor:"transparent", borderDash:[5,4]}
+      ]},
+    drag: {
+      mode:"flowchart",
+      title:"เขียนผังงาน (Flowchart) การทำงานแบบ If-Then ของสัญญาโอนกรรมสิทธิ์บ้าน",
+      prompt:"ลากสัญลักษณ์ผังงานจากกล่องด้านซ้าย ไปวางในผังงานด้านขวาให้เรียงตามลำดับการทำงานที่ถูกต้อง (บนแท็บเล็ตหรือมือถือ ใช้วิธีแตะสัญลักษณ์เพื่อวาง และแตะสัญลักษณ์ในผังงานเพื่อนำออก) มีสัญลักษณ์ที่ไม่ได้ใช้ปะปนอยู่ด้วย",
+      slots:6,
+      blocks:[
+        {id:"f_then",  text:"ใช่ (Then): โอนกรรมสิทธิ์บ้านให้ผู้ซื้ออัตโนมัติ", shape:"process", indent:0},
+        {id:"f_start", text:"เริ่มต้น: เริ่มสัญญาซื้อขายบ้าน", shape:"start", indent:0},
+        {id:"f_staff", text:"ส่งเรื่องให้เจ้าหน้าที่พิจารณาอนุมัติด้วยตนเอง", shape:"process", indent:0},
+        {id:"f_end",   text:"จบการทำงานของสัญญา", shape:"end", indent:0},
+        {id:"f_read",  text:"รับข้อมูลยอดชำระสะสมจากระบบ", shape:"process", indent:0},
+        {id:"f_dec",   text:"ยอดชำระสะสม ≥ 2.4 ล้านบาท หรือไม่", shape:"decision", indent:0},
+        {id:"f_no",    text:"ไม่ใช่: รอรับชำระงวดถัดไป แล้วกลับไปตรวจสอบเงื่อนไขใหม่", shape:"process", indent:0},
+        {id:"f_del",   text:"ลบเงื่อนไขในสัญญาทิ้ง แล้วโอนกรรมสิทธิ์ทันที", shape:"process", indent:0}
+      ],
+      answer:["f_start","f_read","f_dec","f_then","f_no","f_end"]
+    },
+    questions: [
+      {q:"ณ สิ้นเดือน 5 ยอดสะสมคือ 2.0 ล้านบาท (ยังไม่ถึง 2.4) ตามผังงานนี้ สัญญาจะทำอย่างไร",
+       choices:["โอนกรรมสิทธิ์ทันทีเพราะจ่ายไปแล้วเกินครึ่ง","ยังไม่โอน เพราะเงื่อนไข If ยังไม่ครบถ้วน จึงวนกลับไปรอรับชำระงวดถัดไป","ลบสัญญาทิ้ง","ให้เจ้าหน้าที่ตัดสินใจโอนแทนสัญญา"], correct:1}
+    ]
+  }
+];
+
+/* ---------- APPLY: 6 activities (real-time parameter tuning) ---------- */
+const APPLY_ACTIVITIES = [
+  {
+    id:"a1", kind:"weights",
+    title:"กิจกรรมที่ 1 · ปรับน้ำหนักปัจจัยเสี่ยงบล็อก",
+    intro:"BlockGuard คำนวณ \"คะแนนความเสี่ยง\" ของแต่ละบล็อกจากปัจจัย 5 ด้าน โดยรวมเป็นค่าเฉลี่ยถ่วงน้ำหนัก เกณฑ์ตัดสินคงที่: คะแนน < 40 = ต่ำ, 40–70 = ปานกลาง, > 70 = สูง ลองปรับน้ำหนักแต่ละปัจจัยให้ผลการจำแนกของทั้ง 8 บล็อกตรงกับผลจริงให้ได้มากที่สุด",
+    factorNames:["ความคลาดเคลื่อนของ Hash","ความผิดปกติของธุรกรรม","ความผิดปกติของช่วงเวลา","ความถี่การแก้ไขบล็อก","ความไม่เห็นพ้องของโหนด"],
+    blocks:[
+      {id:"BLK-101", f:[85,10,10,60,75], label:"med"},
+      {id:"BLK-102", f:[5,70,60,5,5],   label:"low"},
+      {id:"BLK-103", f:[55,15,10,10,50],label:"med"},
+      {id:"BLK-104", f:[90,90,90,90,95],label:"high"},
+      {id:"BLK-105", f:[10,80,70,75,10],label:"low"},
+      {id:"BLK-106", f:[58,20,15,15,52],label:"med"},
+      {id:"BLK-107", f:[20,10,85,10,15],label:"low"},
+      {id:"BLK-108", f:[75,15,10,15,65],label:"med"}
+    ],
+    thresholds:{low:40, high:70},
+    defaultWeights:[20,20,20,20,20]
+  },
+  {
+    id:"a2", kind:"dualThreshold",
+    title:"กิจกรรมที่ 2 · ปรับเกณฑ์ตัดสินความเสี่ยงบล็อก",
+    intro:"บล็อกทั้ง 10 รายการนี้มีคะแนนความเสี่ยงรวม (น้ำหนักเท่ากันทุกปัจจัย, คำนวณไว้ล่วงหน้าแล้ว) ให้ปรับเส้นเกณฑ์ 2 เส้น (ต่ำ/ปานกลาง และ ปานกลาง/สูง) เพื่อจำแนกบล็อกทั้ง 10 รายการให้ตรงกับผลจริงให้ได้มากที่สุด",
+    blocks:[
+      {id:"BLK-200", score:12, label:"low"},
+      {id:"BLK-201", score:28, label:"low"},
+      {id:"BLK-202", score:34, label:"low"},
+      {id:"BLK-203", score:41, label:"med"},
+      {id:"BLK-204", score:47, label:"med"},
+      {id:"BLK-205", score:55, label:"med"},
+      {id:"BLK-206", score:63, label:"med"},
+      {id:"BLK-207", score:74, label:"high"},
+      {id:"BLK-208", score:82, label:"high"},
+      {id:"BLK-209", score:91, label:"high"}
+    ],
+    defaultLo:30, defaultHi:60
+  },
+  {
+    id:"a3", kind:"chainRepair",
+    title:"กิจกรรมที่ 3 · ซ่อมสายโซ่บล็อกให้ถูกต้อง",
+    intro:"สายโซ่บล็อกด้านล่างมี 2 บล็อกที่ Previous Hash บันทึกผิดพลาด ทำให้สถานะเป็น \"ไม่ถูกต้อง\" ให้ปรับค่า Previous Hash ของ B3 และ B5 (ช่องตัวเลขสีน้ำเงิน) จนกระทั่งทุกบล็อกในสายโซ่มีสถานะ \"ถูกต้อง\" ทั้งหมด",
+    blocks:[
+      {id:"B1", data:"A ส่งเงิน 1,200 ให้ B", prev:null, cur:120, editable:false},
+      {id:"B2", data:"B ส่งเงิน 900 ให้ C",   prev:120,  cur:245, editable:false},
+      {id:"B3", data:"C ส่งเงิน 1,500 ให้ D", prev:999,  cur:310, editable:true, target:245},
+      {id:"B4", data:"D ส่งเงิน 650 ให้ E",   prev:310,  cur:455, editable:false},
+      {id:"B5", data:"E ส่งเงิน 800 ให้ F",   prev:700,  cur:500, editable:true, target:455}
+    ]
+  },
+  {
+    id:"a4", kind:"singleThreshold", direction:"belowIsBad",
+    title:"กิจกรรมที่ 4 · ปรับเกณฑ์ตรวจจับ Hash ผิดปกติ (Avalanche Check)",
+    intro:"เมื่อข้อมูลธุรกรรมถูกแก้ไข ค่า Hash ใหม่ควรแตกต่างจากเดิมอย่างมาก (Avalanche Effect) ถ้า \"คะแนนความแตกต่างของ Hash\" ต่ำผิดปกติ แปลว่าอาจเกิดการปลอมแปลงแบบแนบเนียน (ไม่ผิดปกติจริง) ให้ปรับเกณฑ์ตัดสินเพื่อจำแนกธุรกรรมทั้ง 10 รายการเป็น ปกติ / ผิดปกติ ให้ตรงผลจริงมากที่สุด",
+    labelBelow:"ผิดปกติ", labelAbove:"ปกติ",
+    blocks:[
+      {id:"TXN-300", score:92, label:"normal"},
+      {id:"TXN-301", score:88, label:"normal"},
+      {id:"TXN-302", score:81, label:"normal"},
+      {id:"TXN-303", score:74, label:"normal"},
+      {id:"TXN-304", score:66, label:"normal"},
+      {id:"TXN-305", score:58, label:"normal"},
+      {id:"TXN-306", score:49, label:"tampered"},
+      {id:"TXN-307", score:41, label:"tampered"},
+      {id:"TXN-308", score:33, label:"tampered"},
+      {id:"TXN-309", score:20, label:"tampered"}
+    ],
+    defaultThreshold:45
+  },
+  {
+    id:"a5", kind:"singleThreshold", direction:"belowIsBad",
+    title:"กิจกรรมที่ 5 · ปรับเกณฑ์ความเห็นพ้องของโหนด (Node Agreement)",
+    intro:"แต่ละบล็อกจะถูกยืนยันโดยหลายโหนดในเครือข่ายจำลอง ถ้าสัดส่วนโหนดที่เห็นพ้องว่าบล็อกถูกต้อง (Node Agreement %) ต่ำเกินไป แปลว่าบล็อกนั้นน่าสงสัย ให้ปรับเกณฑ์ตัดสินเพื่อจำแนกบล็อกทั้ง 12 รายการเป็น ปกติ / ผิดปกติ ให้ตรงผลจริงมากที่สุด",
+    labelBelow:"ผิดปกติ", labelAbove:"ปกติ",
+    blocks:[
+      {id:"BLK-400", score:98, label:"normal"},
+      {id:"BLK-401", score:95, label:"normal"},
+      {id:"BLK-402", score:91, label:"normal"},
+      {id:"BLK-403", score:87, label:"normal"},
+      {id:"BLK-404", score:84, label:"normal"},
+      {id:"BLK-405", score:79, label:"normal"},
+      {id:"BLK-406", score:73, label:"normal"},
+      {id:"BLK-407", score:68, label:"normal"},
+      {id:"BLK-408", score:61, label:"tampered"},
+      {id:"BLK-409", score:54, label:"tampered"},
+      {id:"BLK-410", score:47, label:"tampered"},
+      {id:"BLK-411", score:39, label:"tampered"}
+    ],
+    defaultThreshold:75
+  },
+  {
+    id:"a6", kind:"ifThenPayout",
+    title:"กิจกรรมที่ 6 · ประกันภัยเที่ยวบินล่าช้าอัตโนมัติ (Smart Contract)",
+    intro:"Smart Contract ประกันภัยเที่ยวบินล่าช้าตรวจข้อมูลเที่ยวบินเองอัตโนมัติ และจ่ายเงินชดเชยเข้ากระเป๋าดิจิทัลของผู้เอาประกันทันที โดยไม่ต้องยื่นเรื่องเคลม ตามเงื่อนไข: ถ้า (If) เที่ยวบินล่าช้า ≥ D นาที และ ข้อมูลตรงกันระหว่างแหล่งข้อมูลเที่ยวบิน ≥ A% แล้ว (Then) จ่ายชดเชย 2,000 บาททันที ให้ปรับ D และ A เพื่อให้สัญญาตัดสินใจ จ่าย / ไม่จ่าย ของเที่ยวบินทั้ง 10 รายการตรงกับผลจริงมากที่สุด",
+    payout:2000,
+    blocks:[
+      {id:"FL-01", delay:20,  agree:95, label:"nopay"},
+      {id:"FL-02", delay:45,  agree:90, label:"nopay"},
+      {id:"FL-03", delay:100, agree:92, label:"nopay"},
+      {id:"FL-04", delay:125, agree:96, label:"pay"},
+      {id:"FL-05", delay:150, agree:45, label:"nopay"},
+      {id:"FL-06", delay:180, agree:88, label:"pay"},
+      {id:"FL-07", delay:210, agree:60, label:"nopay"},
+      {id:"FL-08", delay:240, agree:91, label:"pay"},
+      {id:"FL-09", delay:130, agree:80, label:"pay"},
+      {id:"FL-10", delay:70,  agree:30, label:"nopay"}
+    ],
+    defaultD:60, defaultA:0
+  }
+];
+
+/* ---------- REFLECT: 4 Likert + 2 open ---------- */
+const LIKERT_ITEMS = [
+  "ฉันสามารถอธิบายหลักการตรวจสอบความสอดคล้องของ Hash ในสายโซ่บล็อกได้อย่างชัดเจน",
+  "ฉันมั่นใจในการปรับพารามิเตอร์ (น้ำหนัก/เกณฑ์) เพื่อให้ระบบตรวจจับบล็อกที่ผิดปกติได้แม่นยำขึ้น",
+  "ฉันเข้าใจว่าเหตุใดการเปลี่ยนแปลงข้อมูลเพียงเล็กน้อยจึงทำให้ค่า Hash เปลี่ยนแปลงไปอย่างสิ้นเชิง",
+  "กิจกรรมนี้ช่วยให้ฉันเข้าใจการทำงานของระบบตรวจสอบความปลอดภัยบล็อกเชนมากขึ้น"
+];
+const LIKERT_SCALE = ["ไม่เห็นด้วยอย่างยิ่ง","ไม่เห็นด้วย","เฉย ๆ","เห็นด้วย","เห็นด้วยอย่างยิ่ง"];
+const OPEN_ITEMS = [
+  "หากระบบ BlockGuard ตั้งเกณฑ์ไวเกินไป (threshold ต่ำ) จนแจ้งเตือนบล็อกปกติว่าผิดปกติบ่อยครั้ง (False Positive) นักเรียนคิดว่าจะส่งผลต่อความน่าเชื่อถือขององค์กรและผู้ใช้งานอย่างไร และควรแก้ไขอย่างไร",
+  "จากประสบการณ์ในการปรับน้ำหนักและเกณฑ์ในขั้นตอน APPLY นักเรียนคิดว่าการตัดสินใจว่าบล็อกใด \"ต้องตรวจสอบ\" ควรใช้ผลจากระบบอัตโนมัติเพียงอย่างเดียว หรือควรมีมนุษย์ร่วมตรวจสอบด้วยเสมอ เพราะเหตุใด"
+];
+
+/* =========================================================
+   App state
+   ========================================================= */
+function freshState(){ return {
+  name:"", grade:"",
+  stage:"intro",
+  showIdx:0, showAns:Array(SHOW_Q.length).fill(null),
+  learnIdx:0, learnAns:LEARN_TASKS.map(t=>Array(t.questions.length).fill(null)),
+  learnDrag:LEARN_TASKS.map(t=> t.drag ? Array(t.drag.slots).fill(null) : null),
+  applyIdx:0,
+  applyParams: APPLY_ACTIVITIES.map(a=>{
+    if(a.kind==="weights") return {w:[...a.defaultWeights]};
+    if(a.kind==="dualThreshold") return {lo:a.defaultLo, hi:a.defaultHi};
+    if(a.kind==="chainRepair"){
+      const vals={};
+      a.blocks.forEach(b=>{ if(b.editable) vals[b.id]=b.prev; });
+      return {vals};
+    }
+    if(a.kind==="singleThreshold") return {t:a.defaultThreshold};
+    if(a.kind==="ifThenPayout") return {d:a.defaultD, a:a.defaultA};
+    return {};
+  }),
+  applyAccuracy: Array(APPLY_ACTIVITIES.length).fill(0),
+  reflectLikert: Array(LIKERT_ITEMS.length).fill(null),
+  reflectOpen: Array(OPEN_ITEMS.length).fill(""),
+  submitted:false,
+  posted:false,
+  chartInstances:[]
+}; }
+const state = freshState();
+
+/* Restart the whole test. Name and grade are kept (and stay editable on the
+   intro screen) so the same student can try again quickly. */
+function restartTest(){
+  const keepName = state.name, keepGrade = state.grade;
+  destroyCharts();
+  Object.assign(state, freshState(), {name:keepName, grade:keepGrade});
+  go("intro");
+}
+
+const STAGES = ["show","learn","apply","reflect"];
+const STAGE_LABELS = {show:"SHOW", learn:"LEARN", apply:"APPLY", reflect:"REFLECT"};
+const HASH_HINTS = ["0xF3A2","0x9C10","0x77B4"];
+
+function destroyCharts(){
+  state.chartInstances.forEach(c=>{ try{ c.destroy(); }catch(e){} });
+  state.chartInstances = [];
+}
+
+/* Draws into `canvasHolderDiv` using `drawFn(canvas)` (which must return a Chart
+   instance). If Chart.js isn't available yet, shows a small retry notice instead
+   of leaving a blank box or throwing and breaking the rest of the screen. */
+function safeChart(canvasHolderDiv, drawFn){
+  if(typeof Chart !== "undefined"){
+    try{
+      const canvas = document.createElement("canvas");
+      canvasHolderDiv.innerHTML = "";
+      canvasHolderDiv.appendChild(canvas);
+      const chart = drawFn(canvas);
+      state.chartInstances.push(chart);
+      return chart;
+    }catch(err){
+      console.error("Chart render error:", err);
+    }
+  }
+  canvasHolderDiv.innerHTML = "";
+  const notice = el("div", null);
+  notice.style.cssText = "display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;height:100%;color:#8C9AC0;font-size:13px;text-align:center;padding:0 12px;";
+  notice.innerHTML = "ไม่สามารถโหลดกราฟได้ในขณะนี้ (เครือข่ายอาจปิดกั้นการโหลดไลบรารีกราฟ) คำถามและกิจกรรมอื่น ๆ ยังทำต่อได้ตามปกติ";
+  const retryBtn = el("button","btn secondary","ลองโหลดกราฟอีกครั้ง");
+  retryBtn.style.cssText = "padding:8px 14px;font-size:12.5px;";
+  retryBtn.addEventListener("click", ()=>{ render(); });
+  notice.appendChild(retryBtn);
+  canvasHolderDiv.appendChild(notice);
+  return null;
+}
+
+function el(tag, cls, html){
+  const e = document.createElement(tag);
+  if(cls) e.className = cls;
+  if(html !== undefined) e.innerHTML = html;
+  return e;
+}
+
+/* ---------- Chain progress + identity bar ---------- */
+function renderChrome(){
+  const idbar = document.getElementById("idbar");
+  const chainbar = document.getElementById("chainbar");
+  if(state.stage === "intro"){
+    idbar.classList.remove("show");
+    chainbar.classList.remove("show");
+    return;
+  }
+  idbar.classList.add("show");
+  document.getElementById("idbar-name").textContent = state.name;
+  document.getElementById("idbar-grade").textContent = state.grade;
+  document.getElementById("idbar-stage").textContent = state.stage === "report" ? "รายงานผล" : STAGE_LABELS[state.stage];
+
+  chainbar.classList.add("show");
+  chainbar.innerHTML = "";
+  STAGES.forEach((s, i) => {
+    const idx = STAGES.indexOf(state.stage);
+    const node = el("div", "chain-node" + (state.stage===s ? " active" : "") + (state.stage!=="report" && idx>i ? " done" : "") + (state.stage==="report" ? " done" : ""));
+    node.appendChild(el("div","dot","B"+(i+1)));
+    node.appendChild(el("div","lbl",STAGE_LABELS[s]));
+    chainbar.appendChild(node);
+    if(i < STAGES.length-1){
+      const link = el("div","chain-link");
+      link.appendChild(el("span","hx",HASH_HINTS[i]));
+      chainbar.appendChild(link);
+    }
+  });
+}
+
+function go(stage){
+  state.stage = stage;
+  window.scrollTo({top:0, behavior:"smooth"});
+  render();
+}
+
+/* ---------- Screen: INTRO ---------- */
+function renderIntro(container){
+  const card = el("div","card");
+  card.innerHTML = `
+    <div class="eyebrow-tag">BLOCKGUARD · SECURITY MONITORING SIM</div>
+    <h1>ระบบความปลอดภัยบล็อกเชนจำลอง (Blockchain Security Monitoring System)</h1>
+    <p class="lead">องค์กรแห่งหนึ่งพัฒนาโปรแกรมจำลอง “<b style="color:#E7ECF6">BlockGuard</b>” เพื่อฝึกความเข้าใจการทำงานของ Blockchain ด้านความปลอดภัยของข้อมูล ระบบเก็บข้อมูลธุรกรรมเป็น “บล็อก” (Block) ที่เชื่อมต่อกันเป็นสายโซ่ (Chain) ตามลำดับเวลา แต่ละบล็อกมีค่า Current Hash ซึ่งเปรียบเสมือนลายนิ้วมือดิจิทัลที่คำนวณจากเนื้อหาของบล็อกนั้น และมีค่า Previous Hash ที่บันทึกไว้ว่าต่อจากบล็อกใด ถ้าค่า Previous Hash ของบล็อกหนึ่งตรงกับค่า Current Hash ของบล็อกก่อนหน้า ถือว่า “ข้อมูลสอดคล้อง” (บล็อกถูกต้อง) แต่ถ้าไม่ตรงกัน ถือว่า “ข้อมูลไม่สอดคล้อง” และบล็อกนั้นจัดเป็น “บล็อกที่ต้องตรวจสอบ”</p>
+    <p class="lead">ภารกิจของคุณ (ผู้ทำแบบทดสอบ) คือใช้ผลการจำลองของตัวแทนดิจิทัล <b style="color:#E7ECF6">BlockBot</b> ที่มีผู้เก็บข้อมูลไว้แล้ว เพื่อตรวจสอบความถูกต้องของบล็อก วิเคราะห์ความผิดปกติ และทำความเข้าใจกลไกการทำงานของ Smart Contract บนบล็อกเชนจำลอง</p>
+    <div class="hero-chain">
+      <div class="hero-block">Block 1</div><div class="hero-arrow">→</div>
+      <div class="hero-block">Block 2</div><div class="hero-arrow">→</div>
+      <div class="hero-block">Block 3</div><div class="hero-arrow">→</div>
+      <div class="hero-block">Block 4</div><div class="hero-arrow">→</div>
+      <div class="hero-block">Block 5</div>
+    </div>
+    <p style="font-size:13px;">ข้อมูลและ Hash ทั้งหมดในแบบทดสอบนี้เป็นข้อมูลจำลองเพื่อการเรียนรู้ ไม่ใช่ระบบ Blockchain จริง · ใช้เวลาทำแบบทดสอบประมาณ 30 นาที แบ่งเป็น 4 ขั้นตอน: SHOW → LEARN → APPLY → REFLECT</p>
+  `;
+  const form = el("div","card");
+  form.innerHTML = `
+    <h2>เริ่มทำแบบทดสอบ</h2>
+    <label for="inp-name">ชื่อผู้เข้าสอบ</label>
+    <input type="text" id="inp-name" placeholder="กรอกชื่อ-นามสกุล" value="${state.name}">
+    <label for="inp-grade">ระดับชั้น</label>
+    <select id="inp-grade">
+      <option value="">-- เลือกระดับชั้น --</option>
+      ${GRADES.map(g=>`<option value="${g}" ${state.grade===g?"selected":""}>${g}</option>`).join("")}
+    </select>
+    <div class="btnrow"><div class="spacer"></div><button class="btn" id="btn-start">เริ่มทำแบบทดสอบ →</button></div>
+  `;
+  container.appendChild(card);
+  container.appendChild(form);
+  document.getElementById("btn-start").addEventListener("click", ()=>{
+    const name = document.getElementById("inp-name").value.trim();
+    const grade = document.getElementById("inp-grade").value;
+    if(!name || !grade){
+      alert("กรุณากรอกชื่อและเลือกระดับชั้นก่อนเริ่มทำแบบทดสอบ");
+      return;
+    }
+    state.name = name; state.grade = grade;
+    go("show");
+  });
+}
+
+/* ---------- Screen: SHOW ---------- */
+function renderShow(container){
+  const i = state.showIdx;
+  const item = SHOW_Q[i];
+  const card = el("div","card");
+  const head = el("div");
+  head.innerHTML = `<div class="eyebrow-tag">SHOW · แสดงสิ่งที่รู้</div>`;
+  card.appendChild(head);
+  const qcount = el("div","qcount", `คำถามที่ ${i+1} / ${SHOW_Q.length}`);
+  const qtext = el("div","qtext", item.q);
+  card.appendChild(qcount);
+  card.appendChild(qtext);
+
+  item.choices.forEach((c, ci)=>{
+    const row = el("div","choice" + (state.showAns[i]===ci ? " selected" : ""));
+    row.innerHTML = `<div class="radio"></div><div class="ctext">${c}</div>`;
+    row.addEventListener("click", ()=>{
+      state.showAns[i] = ci;
+      render();
+    });
+    card.appendChild(row);
+  });
+
+  const btnrow = el("div","btnrow");
+  const back = el("button","btn secondary","← ก่อนหน้า");
+  back.disabled = i===0;
+  back.addEventListener("click", ()=>{ if(i>0){ state.showIdx--; render(); } });
+  const spacer = el("div","spacer");
+  const next = el("button","btn", i===SHOW_Q.length-1 ? "ไปยัง LEARN →" : "ถัดไป →");
+  next.disabled = state.showAns[i]===null;
+  next.addEventListener("click", ()=>{
+    if(i===SHOW_Q.length-1){ go("learn"); }
+    else { state.showIdx++; render(); }
+  });
+  btnrow.appendChild(back); btnrow.appendChild(spacer); btnrow.appendChild(next);
+  card.appendChild(btnrow);
+  container.appendChild(card);
+}
+
+/* ---------- Drag-and-drop builder (Scratch-style blocks / flowchart) ---------- */
+function renderDragBuilder(container, task, ti){
+  const d = task.drag;
+  const placed = state.learnDrag[ti];
+
+  const card = el("div","card");
+  card.innerHTML = `<h3>${d.title}</h3><p style="font-size:13.5px;">${d.prompt}</p>`;
+
+  const stage = el("div","drag-stage");
+  const palette = el("div","drag-palette");
+  palette.appendChild(el("div","drag-col-label","กล่องบล็อกคำสั่ง"));
+  const script = el("div","drag-script");
+  script.appendChild(el("div","drag-col-label", d.mode==="flowchart" ? "ผังงานของคุณ" : "สคริปต์ของคุณ"));
+
+  /* Pointer-based drag: works with mouse AND touch (HTML5 drag-and-drop has no
+     touch support, so tablets would otherwise be stuck with tap-only). A short
+     press without movement is treated as a tap. */
+  let drag = null;
+
+  function placeBlock(id, fromSlot, toSlot){
+    if(fromSlot !== null && fromSlot !== undefined) placed[fromSlot] = null;
+    if(toSlot !== null && toSlot !== undefined){
+      const displaced = placed[toSlot];
+      placed[toSlot] = id;
+      if(displaced && displaced !== id){
+        const empty = placed.indexOf(null);
+        if(empty !== -1) placed[empty] = displaced;
+      }
+    }
+    render();
+  }
+
+  function clearHighlights(){
+    script.querySelectorAll(".drag-slot.over").forEach(e=>e.classList.remove("over"));
+    palette.classList.remove("over");
+  }
+
+  function targetUnder(x, y){
+    const el2 = document.elementFromPoint(x, y);
+    if(!el2) return null;
+    const slot = el2.closest(".drag-slot");
+    if(slot && script.contains(slot)) return {type:"slot", el:slot, index:Number(slot.dataset.slotIndex)};
+    if(el2.closest(".drag-palette")) return {type:"palette"};
+    return null;
+  }
+
+  function onPointerMove(ev){
+    if(!drag) return;
+    const dx = ev.clientX - drag.startX, dy = ev.clientY - drag.startY;
+    if(!drag.active && Math.hypot(dx, dy) < 6) return;
+    if(!drag.active){
+      drag.active = true;
+      const r = drag.el.getBoundingClientRect();
+      drag.ghost = drag.el.cloneNode(true);
+      drag.ghost.classList.add("drag-ghost");
+      drag.ghost.style.width = r.width + "px";
+      drag.ghost.style.marginLeft = "0";
+      document.body.appendChild(drag.ghost);
+      drag.offX = drag.startX - r.left;
+      drag.offY = drag.startY - r.top;
+      drag.el.classList.add("dragging");
+    }
+    ev.preventDefault();
+    drag.ghost.style.left = (ev.clientX - drag.offX) + "px";
+    drag.ghost.style.top  = (ev.clientY - drag.offY) + "px";
+    clearHighlights();
+    const t = targetUnder(ev.clientX, ev.clientY);
+    if(t && t.type === "slot") t.el.classList.add("over");
+    else if(t && t.type === "palette") palette.classList.add("over");
+
+    // auto-scroll when dragging near the top/bottom edge, so slots that are
+    // off-screen (common on phones and tablets) can still be reached
+    const edge = 70;
+    if(ev.clientY < edge) window.scrollBy(0, -Math.ceil((edge - ev.clientY) / 4));
+    else if(ev.clientY > window.innerHeight - edge) window.scrollBy(0, Math.ceil((ev.clientY - (window.innerHeight - edge)) / 4));
+  }
+
+  function onPointerUp(ev){
+    if(!drag) return;
+    const d = drag; drag = null;
+    window.removeEventListener("pointermove", onPointerMove);
+    window.removeEventListener("pointerup", onPointerUp);
+    window.removeEventListener("pointercancel", onPointerUp);
+    if(d.ghost) d.ghost.remove();
+    d.el.classList.remove("dragging");
+    clearHighlights();
+
+    if(!d.active){
+      // treated as a tap
+      if(d.from === null){
+        const empty = placed.indexOf(null);
+        if(empty !== -1) placeBlock(d.id, null, empty);
+      } else {
+        placed[d.from] = null;
+        render();
+      }
+      return;
+    }
+    const t = targetUnder(ev.clientX, ev.clientY);
+    if(t && t.type === "slot") placeBlock(d.id, d.from, t.index);
+    else if(t && t.type === "palette" && d.from !== null) placeBlock(d.id, d.from, null);
+  }
+
+  function blockEl(b, opts){
+    const e = el("div","drag-block shape-"+b.shape+(opts && opts.inSlot ? " in-slot":""));
+    e.style.marginLeft = (b.indent||0) * 18 + "px";
+    e.innerHTML = `<span class="db-text">${b.text}</span>`;
+    e.addEventListener("pointerdown", (ev)=>{
+      if(ev.button !== undefined && ev.button !== 0) return;
+      drag = {
+        id: b.id,
+        from: (opts && opts.inSlot) ? opts.slotIndex : null,
+        el: e, startX: ev.clientX, startY: ev.clientY, active:false, ghost:null
+      };
+      window.addEventListener("pointermove", onPointerMove, {passive:false});
+      window.addEventListener("pointerup", onPointerUp);
+      window.addEventListener("pointercancel", onPointerUp);
+    });
+    return e;
+  }
+
+  // palette: blocks not yet placed  // palette: blocks not yet placed
+  const unused = d.blocks.filter(b=> placed.indexOf(b.id) === -1);
+  if(unused.length === 0){
+    const empty = el("div","drag-empty-note","วางบล็อกครบทุกช่องแล้ว — แตะบล็อกในสคริปต์เพื่อนำกลับมาแก้ไขได้");
+    palette.appendChild(empty);
+  }
+  unused.forEach(b=>{ palette.appendChild(blockEl(b, {inSlot:false})); });
+
+  // script: numbered slots
+  for(let i=0;i<d.slots;i++){
+    const slot = el("div","drag-slot" + (placed[i] ? " filled":""));
+    slot.dataset.slotIndex = String(i);
+    slot.appendChild(el("span","slot-num", String(i+1)));
+    const inner = el("div","slot-inner");
+    if(placed[i]){
+      const b = d.blocks.find(x=>x.id===placed[i]);
+      inner.appendChild(blockEl(b, {inSlot:true, slotIndex:i}));
+    } else {
+      inner.appendChild(el("span","slot-hint", d.mode==="flowchart" ? "วางสัญลักษณ์ผังงานที่นี่" : "วางบล็อกคำสั่งที่นี่"));
+    }
+    slot.appendChild(inner);
+    script.appendChild(slot);
+    if(i < d.slots-1) script.appendChild(el("div","drag-arrow","↓"));
+  }
+
+  stage.appendChild(palette);
+  stage.appendChild(script);
+  card.appendChild(stage);
+
+  const filled = placed.filter(v=>v!==null).length;
+  const status = el("div","drag-status", `วางแล้ว ${filled} / ${d.slots} ช่อง`);
+  card.appendChild(status);
+
+  const resetBtn = el("button","btn secondary","ล้างและเริ่มใหม่");
+  resetBtn.style.cssText = "margin-top:10px;padding:8px 14px;font-size:12.5px;";
+  resetBtn.addEventListener("click", ()=>{
+    for(let i=0;i<d.slots;i++) placed[i]=null;
+    render();
+  });
+  card.appendChild(resetBtn);
+
+  container.appendChild(card);
+}
+
+/* ---------- Screen: LEARN ---------- */
+function renderLearn(container){
+  const t = LEARN_TASKS[state.learnIdx];
+  const card = el("div","card");
+  card.innerHTML = `<div class="eyebrow-tag">LEARN · เรียนรู้ (${state.learnIdx+1}/${LEARN_TASKS.length})</div><h2>${t.title}</h2>`;
+  const lesson = el("div","lesson-box", t.lesson);
+  card.appendChild(lesson);
+
+  const chartDiv = el("div","chartwrap");
+  card.appendChild(chartDiv);
+
+  container.appendChild(card);
+
+  safeChart(chartDiv, (canvas)=> new Chart(canvas.getContext("2d"), {
+    type: t.chart.type,
+    data: { labels: t.chart.labels, datasets: t.chart.datasets },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display: t.chart.datasets.length>1, labels:{color:"#93A0BC", font:{family:"IBM Plex Sans Thai"}} } },
+      scales:{
+        x:{ ticks:{color:"#8C9AC0"}, grid:{color:"rgba(255,255,255,0.04)"} },
+        y:{ ticks:{color:"#8C9AC0"}, grid:{color:"rgba(255,255,255,0.06)"} }
+      }
+    }
+  }));
+
+  if(t.drag) renderDragBuilder(container, t, state.learnIdx);
+
+  const qcard = el("div","card");
+  qcard.innerHTML = `<h3>คำถามฝึกปฏิบัติ</h3>`;
+  t.questions.forEach((q, qi)=>{
+    const qwrap = el("div", null);
+    qwrap.style.marginBottom = "18px";
+    qwrap.appendChild(el("div","qtext", (qi+1)+". "+q.q));
+    q.choices.forEach((c,ci)=>{
+      const sel = state.learnAns[state.learnIdx][qi]===ci;
+      const row = el("div","choice"+(sel?" selected":""));
+      row.innerHTML = `<div class="radio"></div><div class="ctext">${c}</div>`;
+      row.addEventListener("click", ()=>{
+        state.learnAns[state.learnIdx][qi] = ci;
+        render();
+      });
+      qwrap.appendChild(row);
+    });
+    qcard.appendChild(qwrap);
+  });
+
+  const dragDone = !t.drag || state.learnDrag[state.learnIdx].every(v=>v!==null);
+  const allAnswered = state.learnAns[state.learnIdx].every(a=>a!==null) && dragDone;
+  const btnrow = el("div","btnrow");
+  const back = el("button","btn secondary","← ก่อนหน้า");
+  back.addEventListener("click", ()=>{
+    if(state.learnIdx>0){ state.learnIdx--; render(); }
+    else { go("show"); state.showIdx = SHOW_Q.length-1; }
+  });
+  const spacer = el("div","spacer");
+  const next = el("button","btn", state.learnIdx===LEARN_TASKS.length-1 ? "ไปยัง APPLY →" : "ถัดไป →");
+  next.disabled = !allAnswered;
+  next.addEventListener("click", ()=>{
+    if(state.learnIdx===LEARN_TASKS.length-1){ go("apply"); }
+    else { state.learnIdx++; render(); }
+  });
+  btnrow.appendChild(back); btnrow.appendChild(spacer); btnrow.appendChild(next);
+  qcard.appendChild(btnrow);
+  container.appendChild(qcard);
+}
+
+/* =========================================================
+   APPLY — compute helpers
+   ========================================================= */
+function labelThai(l){
+  return {low:"ต่ำ", med:"ปานกลาง", high:"สูง", normal:"ปกติ", tampered:"ผิดปกติ", pay:"จ่ายชดเชย", nopay:"ไม่จ่าย"}[l] || l;
+}
+function labelColor(l){
+  return {low:"#2FD98A", med:"#F5A93B", high:"#E4576B", normal:"#2FD98A", tampered:"#E4576B", pay:"#2FD98A", nopay:"#8C9AC0"}[l] || "#6C8CFF";
+}
+
+function classifyThree(score, low, high){
+  if(score < low) return "low";
+  if(score <= high) return "med";
+  return "high";
+}
+function classifyBinary(score, t){
+  return score < t ? "tampered" : "normal";
+}
+
+function computeActivityResult(activity, params){
+  if(activity.kind === "weights"){
+    const sw = params.w.reduce((a,b)=>a+b,0);
+    const results = activity.blocks.map(b=>{
+      const score = sw===0 ? 0 : b.f.reduce((acc,fi,idx)=>acc+fi*params.w[idx],0)/sw;
+      const computed = classifyThree(score, activity.thresholds.low, activity.thresholds.high);
+      return {id:b.id, score, computed, truth:b.label, correct: computed===b.label};
+    });
+    return results;
+  }
+  if(activity.kind === "dualThreshold"){
+    return activity.blocks.map(b=>{
+      const computed = classifyThree(b.score, params.lo, params.hi);
+      return {id:b.id, score:b.score, computed, truth:b.label, correct: computed===b.label};
+    });
+  }
+  if(activity.kind === "singleThreshold"){
+    return activity.blocks.map(b=>{
+      const computed = classifyBinary(b.score, params.t);
+      return {id:b.id, score:b.score, computed, truth:b.label, correct: computed===b.label};
+    });
+  }
+  if(activity.kind === "ifThenPayout"){
+    return activity.blocks.map(b=>{
+      const computed = (b.delay >= params.d && b.agree >= params.a) ? "pay" : "nopay";
+      return {id:b.id, score:b.delay, computed, truth:b.label, correct: computed===b.label};
+    });
+  }
+  if(activity.kind === "chainRepair"){
+    return activity.blocks.map((b,idx)=>{
+      if(b.prev===null || idx===0){
+        return {id:b.id, correct:true, status:"ถูกต้อง (บล็อกเริ่มต้น)"};
+      }
+      const effectivePrev = b.editable ? Number(params.vals[b.id]) : b.prev;
+      const priorCur = activity.blocks[idx-1].cur;
+      const match = effectivePrev === priorCur;
+      return {id:b.id, correct:match, status: match?"ถูกต้อง":"ไม่ถูกต้อง", effectivePrev, priorCur};
+    });
+  }
+  return [];
+}
+
+function accuracyOf(results){
+  if(results.length===0) return 0;
+  const correct = results.filter(r=>r.correct).length;
+  return Math.round((correct/results.length)*100);
+}
+
+function accuracyClass(pct){
+  if(pct===100) return "full";
+  if(pct>=70) return "partial";
+  return "low";
+}
+
+function renderAccuracyBanner(parent, pct){
+  const banner = el("div","accuracy-banner");
+  banner.innerHTML = `<div class="acc-label">ความแม่นยำเทียบกับผลจริง</div><div class="acc-value ${accuracyClass(pct)}">${pct}%</div>`;
+  parent.appendChild(banner);
+  return banner;
+}
+
+function makeResultChart(chartDiv, results, isThree){
+  return safeChart(chartDiv, (canvas)=> new Chart(canvas.getContext("2d"), {
+    type:"bar",
+    data:{
+      labels: results.map(r=>r.id),
+      datasets:[{
+        label:"ผลจำแนกปัจจุบัน",
+        data: results.map(r=> isThree ? (r.computed==="low"?1:r.computed==="med"?2:3) : (r.computed==="normal"?1:2) ),
+        backgroundColor: results.map(r=> r.correct ? "#2FD98A" : "#E4576B")
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label:(ctx)=>{
+          const r = results[ctx.dataIndex];
+          return "จำแนกเป็น: "+labelThai(r.computed)+" (จริง: "+labelThai(r.truth)+")";
+        }}}
+      },
+      scales:{
+        x:{ ticks:{color:"#8C9AC0", font:{size:10}}, grid:{display:false} },
+        y:{ display:false }
+      }
+    }
+  }));
+}
+
+/* =========================================================
+   APPLY — render per kind
+   ========================================================= */
+function applyNavRow(container, aidx, results){
+  const btnrow = el("div","btnrow");
+  const back = el("button","btn secondary","← ก่อนหน้า");
+  back.addEventListener("click", ()=>{
+    if(aidx>0){ state.applyIdx--; render(); }
+    else { go("learn"); state.learnIdx = LEARN_TASKS.length-1; }
+  });
+  const spacer = el("div","spacer");
+  const isLast = aidx === APPLY_ACTIVITIES.length-1;
+  const next = el("button","btn", isLast ? "ไปยัง REFLECT →" : "กิจกรรมถัดไป →");
+  next.addEventListener("click", ()=>{
+    state.applyAccuracy[aidx] = accuracyOf(results);
+    if(isLast){ go("reflect"); }
+    else { state.applyIdx++; render(); }
+  });
+  btnrow.appendChild(back); btnrow.appendChild(spacer); btnrow.appendChild(next);
+  container.appendChild(btnrow);
+}
+
+function renderApplyWeights(container, activity, aidx){
+  const card = el("div","card");
+  card.innerHTML = `<div class="eyebrow-tag">APPLY · กิจกรรมที่ ${aidx+1}/${APPLY_ACTIVITIES.length}</div><h2>${activity.title}</h2><p>${activity.intro}</p>
+    <p style="font-size:13px;">เกณฑ์คงที่: คะแนน < ${activity.thresholds.low} = ต่ำ &nbsp;|&nbsp; ${activity.thresholds.low}–${activity.thresholds.high} = ปานกลาง &nbsp;|&nbsp; > ${activity.thresholds.high} = สูง</p>`;
+
+  const params = state.applyParams[aidx];
+  activity.factorNames.forEach((name, fi)=>{
+    const row = el("div","slider-row");
+    row.innerHTML = `<div class="sr-top"><span class="sname">${name}</span><span class="sval" id="wval-${fi}">${params.w[fi]}</span></div>`;
+    const input = document.createElement("input");
+    input.type="range"; input.min="0"; input.max="100"; input.step="5"; input.value=params.w[fi];
+    input.addEventListener("input", (e)=>{
+      params.w[fi] = Number(e.target.value);
+      document.getElementById("wval-"+fi).textContent = params.w[fi];
+      refreshResults();
+    });
+    row.appendChild(input);
+    card.appendChild(row);
+  });
+
+  const tblWrap = el("div", null);
+  tblWrap.innerHTML = `<h3 style="margin-top:18px;">ข้อมูลบล็อกตัวอย่าง (8 รายการ)</h3>`;
+  const table = el("table","blocktbl");
+  table.innerHTML = `<tr><th>Block</th>${activity.factorNames.map(n=>`<th>${n}</th>`).join("")}</tr>` +
+    activity.blocks.map(b=>`<tr><td>${b.id}</td>${b.f.map(v=>`<td>${v}</td>`).join("")}</tr>`).join("");
+  tblWrap.appendChild(table);
+  card.appendChild(tblWrap);
+
+  const chartDiv = el("div","chartwrap");
+  card.appendChild(chartDiv);
+
+  const bannerHolder = el("div", null);
+  card.appendChild(bannerHolder);
+
+  container.appendChild(card);
+
+  let currentResults;
+  function refreshResults(){
+    currentResults = computeActivityResult(activity, params);
+    makeResultChart(chartDiv, currentResults, true);
+    bannerHolder.innerHTML = "";
+    renderAccuracyBanner(bannerHolder, accuracyOf(currentResults));
+  }
+  refreshResults();
+
+  applyNavRow(card, aidx, {get length(){return currentResults.length;}, filter:(fn)=>currentResults.filter(fn)});
+  card._getResults = ()=>currentResults;
+}
+
+function renderApplyDualThreshold(container, activity, aidx){
+  const card = el("div","card");
+  card.innerHTML = `<div class="eyebrow-tag">APPLY · กิจกรรมที่ ${aidx+1}/${APPLY_ACTIVITIES.length}</div><h2>${activity.title}</h2><p>${activity.intro}</p>`;
+
+  const params = state.applyParams[aidx];
+  const rowLo = el("div","slider-row");
+  rowLo.innerHTML = `<div class="sr-top"><span class="sname">เกณฑ์ ต่ำ / ปานกลาง</span><span class="sval" id="lo-val">${params.lo}</span></div>`;
+  const inLo = document.createElement("input"); inLo.type="range"; inLo.min="0"; inLo.max="100"; inLo.step="1"; inLo.value=params.lo;
+  rowLo.appendChild(inLo);
+  const rowHi = el("div","slider-row");
+  rowHi.innerHTML = `<div class="sr-top"><span class="sname">เกณฑ์ ปานกลาง / สูง</span><span class="sval" id="hi-val">${params.hi}</span></div>`;
+  const inHi = document.createElement("input"); inHi.type="range"; inHi.min="0"; inHi.max="100"; inHi.step="1"; inHi.value=params.hi;
+  rowHi.appendChild(inHi);
+  card.appendChild(rowLo); card.appendChild(rowHi);
+
+  const chartDiv = el("div","chartwrap");
+  card.appendChild(chartDiv);
+  const bannerHolder = el("div", null);
+  card.appendChild(bannerHolder);
+  container.appendChild(card);
+
+  let currentResults;
+  function refreshResults(){
+    if(params.hi < params.lo){ params.hi = params.lo; inHi.value = params.hi; }
+    document.getElementById("lo-val").textContent = params.lo;
+    document.getElementById("hi-val").textContent = params.hi;
+    currentResults = computeActivityResult(activity, params);
+    makeResultChart(chartDiv, currentResults, true);
+    bannerHolder.innerHTML = "";
+    renderAccuracyBanner(bannerHolder, accuracyOf(currentResults));
+  }
+  inLo.addEventListener("input", (e)=>{ params.lo = Number(e.target.value); refreshResults(); });
+  inHi.addEventListener("input", (e)=>{ params.hi = Number(e.target.value); refreshResults(); });
+  refreshResults();
+
+  applyNavRow(card, aidx, {get length(){return currentResults.length;}, filter:(fn)=>currentResults.filter(fn)});
+}
+
+function renderApplyChainRepair(container, activity, aidx){
+  const card = el("div","card");
+  card.innerHTML = `<div class="eyebrow-tag">APPLY · กิจกรรมที่ ${aidx+1}/${APPLY_ACTIVITIES.length}</div><h2>${activity.title}</h2><p>${activity.intro}</p>`;
+
+  const params = state.applyParams[aidx];
+  const table = el("table","blocktbl");
+  let rows = `<tr><th>Block</th><th>Transaction Data</th><th>Previous Hash</th><th>Current Hash</th><th>สถานะ</th></tr>`;
+  table.innerHTML = rows;
+  card.appendChild(table);
+
+  const chartDiv = el("div","chartwrap");
+  card.appendChild(chartDiv);
+  const bannerHolder = el("div", null);
+  card.appendChild(bannerHolder);
+  container.appendChild(card);
+
+  let currentResults;
+  function refreshTable(){
+    currentResults = computeActivityResult(activity, params);
+    let html = `<tr><th>Block</th><th>Transaction Data</th><th>Previous Hash</th><th>Current Hash</th><th>สถานะ</th></tr>`;
+    activity.blocks.forEach((b,idx)=>{
+      const r = currentResults[idx];
+      const prevCell = b.editable
+        ? `<input type="number" class="num-input" id="previn-${b.id}" value="${params.vals[b.id]}">`
+        : (b.prev===null ? "—" : "H"+b.prev);
+      const statusPill = idx===0
+        ? `<span class="pill ok">Genesis</span>`
+        : (r.correct ? `<span class="pill ok">ถูกต้อง</span>` : `<span class="pill bad">ไม่ถูกต้อง</span>`);
+      html += `<tr><td>${b.id}</td><td class="mono" style="font-family:inherit;">${b.data}</td><td>${prevCell}</td><td>H${b.cur}</td><td>${statusPill}</td></tr>`;
+    });
+    table.innerHTML = html;
+    activity.blocks.forEach(b=>{
+      if(b.editable){
+        const input = document.getElementById("previn-"+b.id);
+        input.addEventListener("input", (e)=>{
+          params.vals[b.id] = e.target.value === "" ? NaN : Number(e.target.value);
+          refreshChart();
+        });
+      }
+    });
+  }
+  function refreshChart(){
+    currentResults = computeActivityResult(activity, params);
+    // resync table status pills without full rebuild of inputs (avoid losing focus)
+    activity.blocks.forEach((b,idx)=>{
+      if(idx===0) return;
+      const r = currentResults[idx];
+      const cell = table.rows[idx+1].cells[4];
+      cell.innerHTML = r.correct ? `<span class="pill ok">ถูกต้อง</span>` : `<span class="pill bad">ไม่ถูกต้อง</span>`;
+    });
+    safeChart(chartDiv, (canvas)=> new Chart(canvas.getContext("2d"), {
+      type:"bar",
+      data:{
+        labels: activity.blocks.map(b=>b.id),
+        datasets:[{ label:"สถานะสายโซ่ (1=ถูกต้อง, 0=ไม่ถูกต้อง)",
+          data: currentResults.map(r=> r.correct?1:0),
+          backgroundColor: currentResults.map(r=> r.correct? "#2FD98A":"#E4576B") }]
+      },
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{ x:{ticks:{color:"#8C9AC0"}, grid:{display:false}}, y:{min:0,max:1, ticks:{color:"#8C9AC0", stepSize:1}} } }
+    }));
+    bannerHolder.innerHTML = "";
+    renderAccuracyBanner(bannerHolder, accuracyOf(currentResults));
+  }
+  refreshTable();
+  refreshChart();
+
+  applyNavRow(card, aidx, {get length(){return currentResults.length;}, filter:(fn)=>currentResults.filter(fn)});
+}
+
+function renderApplySingleThreshold(container, activity, aidx){
+  const card = el("div","card");
+  card.innerHTML = `<div class="eyebrow-tag">APPLY · กิจกรรมที่ ${aidx+1}/${APPLY_ACTIVITIES.length}</div><h2>${activity.title}</h2><p>${activity.intro}</p>`;
+
+  const params = state.applyParams[aidx];
+  const row = el("div","slider-row");
+  row.innerHTML = `<div class="sr-top"><span class="sname">เกณฑ์ตัดสิน (${labelThai(activity.labelBelow)} ต่ำกว่า / ${labelThai(activity.labelAbove)} เท่ากับหรือสูงกว่า)</span><span class="sval" id="tval">${params.t}</span></div>`;
+  const input = document.createElement("input"); input.type="range"; input.min="0"; input.max="100"; input.step="1"; input.value=params.t;
+  row.appendChild(input);
+  card.appendChild(row);
+
+  const chartDiv = el("div","chartwrap");
+  card.appendChild(chartDiv);
+  const bannerHolder = el("div", null);
+  card.appendChild(bannerHolder);
+  container.appendChild(card);
+
+  let currentResults;
+  function refreshResults(){
+    document.getElementById("tval").textContent = params.t;
+    currentResults = computeActivityResult(activity, params);
+    makeResultChart(chartDiv, currentResults, false);
+    bannerHolder.innerHTML = "";
+    renderAccuracyBanner(bannerHolder, accuracyOf(currentResults));
+  }
+  input.addEventListener("input", (e)=>{ params.t = Number(e.target.value); refreshResults(); });
+  refreshResults();
+
+  applyNavRow(card, aidx, {get length(){return currentResults.length;}, filter:(fn)=>currentResults.filter(fn)});
+}
+
+function renderApplyIfThenPayout(container, activity, aidx){
+  const card = el("div","card");
+  card.innerHTML = `<div class="eyebrow-tag">APPLY · กิจกรรมที่ ${aidx+1}/${APPLY_ACTIVITIES.length}</div><h2>${activity.title}</h2><p>${activity.intro}</p>
+    <div class="lesson-box mono" id="if-then-rule"></div>`;
+
+  const params = state.applyParams[aidx];
+  function slider(name, id, min, max, step, val, onInput){
+    const row = el("div","slider-row");
+    row.innerHTML = `<div class="sr-top"><span class="sname">${name}</span><span class="sval" id="${id}">${val}</span></div>`;
+    const inp = document.createElement("input");
+    inp.type="range"; inp.min=min; inp.max=max; inp.step=step; inp.value=val;
+    inp.addEventListener("input", e=>onInput(Number(e.target.value)));
+    row.appendChild(inp);
+    card.appendChild(row);
+  }
+  slider("D · เกณฑ์ความล่าช้าขั้นต่ำ (นาที)", "d-val", 0, 240, 5, params.d, v=>{ params.d=v; refresh(); });
+  slider("A · เกณฑ์ข้อมูลตรงกันระหว่างแหล่งข้อมูล (%)", "a-val", 0, 100, 5, params.a, v=>{ params.a=v; refresh(); });
+
+  const tableHolder = el("div", null);
+  card.appendChild(tableHolder);
+  const chartDiv = el("div","chartwrap");
+  card.appendChild(chartDiv);
+  const bannerHolder = el("div", null);
+  card.appendChild(bannerHolder);
+  const payoutNote = el("p", null);
+  payoutNote.style.fontSize = "13px";
+  card.appendChild(payoutNote);
+  container.appendChild(card);
+
+  let currentResults;
+  function refresh(){
+    document.getElementById("d-val").textContent = params.d;
+    document.getElementById("a-val").textContent = params.a;
+    document.getElementById("if-then-rule").innerHTML =
+      `IF (ล่าช้า ≥ ${params.d} นาที AND ข้อมูลตรงกัน ≥ ${params.a}%) THEN จ่ายชดเชย ${activity.payout.toLocaleString()} บาท เข้ากระเป๋าดิจิทัลทันที`;
+    currentResults = computeActivityResult(activity, params);
+
+    let html = `<table class="blocktbl"><tr><th>เที่ยวบิน</th><th>ล่าช้า (นาที)</th><th>ข้อมูลตรงกัน (%)</th><th>การตัดสินใจของสัญญา</th></tr>`;
+    activity.blocks.forEach((b,i)=>{
+      const r = currentResults[i];
+      html += `<tr><td>${b.id}</td><td>${b.delay}</td><td>${b.agree}</td><td>${r.computed==="pay" ? '<span class="pill ok">จ่ายชดเชยอัตโนมัติ</span>' : '<span class="pill warn">ไม่จ่าย</span>'}</td></tr>`;
+    });
+    html += `</table>`;
+    tableHolder.innerHTML = html;
+
+    safeChart(chartDiv, (canvas)=> new Chart(canvas.getContext("2d"), {
+      type:"bar",
+      data:{ labels: currentResults.map(r=>r.id),
+        datasets:[{ label:"ความล่าช้า (นาที)", data: currentResults.map(r=>r.score),
+          backgroundColor: currentResults.map(r=> r.correct ? "#2FD98A" : "#E4576B") }] },
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false},
+          tooltip:{ callbacks:{ label:(ctx)=>{ const r=currentResults[ctx.dataIndex]; return "สัญญา: "+labelThai(r.computed)+" (ผลจริง: "+labelThai(r.truth)+")"; } } } },
+        scales:{ x:{ticks:{color:"#8C9AC0", font:{size:10}}, grid:{display:false}}, y:{ticks:{color:"#8C9AC0"}, grid:{color:"rgba(255,255,255,0.06)"}} } }
+    }));
+
+    bannerHolder.innerHTML = "";
+    renderAccuracyBanner(bannerHolder, accuracyOf(currentResults));
+    const paid = currentResults.filter(r=>r.computed==="pay").length;
+    payoutNote.textContent = `สัญญาจ่ายชดเชยอัตโนมัติ ${paid} รายการ รวม ${(paid*activity.payout).toLocaleString()} บาท (ไม่ต้องยื่นเรื่องเคลม)`;
+  }
+  refresh();
+
+  applyNavRow(card, aidx, {get length(){return currentResults.length;}, filter:(fn)=>currentResults.filter(fn)});
+}
+
+function renderApply(container){
+  const aidx = state.applyIdx;
+  const activity = APPLY_ACTIVITIES[aidx];
+  if(activity.kind==="weights") renderApplyWeights(container, activity, aidx);
+  else if(activity.kind==="dualThreshold") renderApplyDualThreshold(container, activity, aidx);
+  else if(activity.kind==="chainRepair") renderApplyChainRepair(container, activity, aidx);
+  else if(activity.kind==="singleThreshold") renderApplySingleThreshold(container, activity, aidx);
+  else if(activity.kind==="ifThenPayout") renderApplyIfThenPayout(container, activity, aidx);
+}
+
+/* ---------- Screen: REFLECT ---------- */
+function renderReflect(container){
+  const card = el("div","card");
+  card.innerHTML = `<div class="eyebrow-tag">REFLECT · ประเมินตนเอง</div><h2>สะท้อนคิดเกี่ยวกับสิ่งที่เรียนรู้</h2><p>เลือกระดับความเห็นด้วยกับข้อความต่อไปนี้ และตอบคำถามปลายเปิดตามความคิดเห็นของนักเรียน</p>`;
+
+  LIKERT_ITEMS.forEach((text, li)=>{
+    const row = el("div","likert-row");
+    row.appendChild(el("div","likert-q", (li+1)+". "+text));
+    const opts = el("div","likert-opts");
+    LIKERT_SCALE.forEach((label, oi)=>{
+      const opt = el("div","likert-opt"+(state.reflectLikert[li]===oi?" selected":""), label);
+      opt.addEventListener("click", ()=>{ state.reflectLikert[li]=oi; render(); });
+      opts.appendChild(opt);
+    });
+    row.appendChild(opts);
+    card.appendChild(row);
+  });
+
+  OPEN_ITEMS.forEach((q, oi)=>{
+    const wrap = el("div", null);
+    wrap.style.marginBottom = "16px";
+    wrap.appendChild(el("div","likert-q", (LIKERT_ITEMS.length+oi+1)+". "+q));
+    const ta = document.createElement("textarea");
+    ta.placeholder = "พิมพ์คำตอบของนักเรียนที่นี่...";
+    ta.value = state.reflectOpen[oi];
+    ta.addEventListener("input", (e)=>{ state.reflectOpen[oi] = e.target.value; refreshSubmitState(); });
+    wrap.appendChild(ta);
+    card.appendChild(wrap);
+  });
+
+  const btnrow = el("div","btnrow");
+  const back = el("button","btn secondary","← ก่อนหน้า");
+  back.addEventListener("click", ()=>{ go("apply"); state.applyIdx = APPLY_ACTIVITIES.length-1; });
+  const spacer = el("div","spacer");
+  const submit = el("button","btn","ส่งแบบทดสอบและดูรายงานผล →");
+  btnrow.appendChild(back); btnrow.appendChild(spacer); btnrow.appendChild(submit);
+  card.appendChild(btnrow);
+  container.appendChild(card);
+
+  function refreshSubmitState(){
+    const likertDone = state.reflectLikert.every(v=>v!==null);
+    const openDone = state.reflectOpen.every(v=>v.trim().length>=10);
+    submit.disabled = !(likertDone && openDone);
+  }
+  submit.addEventListener("click", ()=>{
+    submitTest();
+  });
+  refreshSubmitState();
+}
+
+/* =========================================================
+   Scoring
+   ========================================================= */
+function computeShowScore(){
+  const correct = SHOW_Q.filter((q,i)=>state.showAns[i]===q.correct).length;
+  return {correct, total:SHOW_Q.length, pct: Math.round(correct/SHOW_Q.length*100)};
+}
+function dragIsCorrect(ti){
+  const t = LEARN_TASKS[ti];
+  if(!t.drag) return false;
+  const placed = state.learnDrag[ti];
+  return t.drag.answer.every((id,i)=> placed[i]===id);
+}
+function computeLearnScore(){
+  let correct=0, total=0;
+  LEARN_TASKS.forEach((t,ti)=>{
+    if(t.drag){
+      total++;
+      if(dragIsCorrect(ti)) correct++;
+    }
+    t.questions.forEach((q,qi)=>{
+      total++;
+      if(state.learnAns[ti][qi]===q.correct) correct++;
+    });
+  });
+  return {correct, total, pct: Math.round(correct/total*100)};
+}
+function computeApplyScore(){
+  const avg = state.applyAccuracy.reduce((a,b)=>a+b,0)/state.applyAccuracy.length;
+  return {perActivity: [...state.applyAccuracy], pct: Math.round(avg)};
+}
+function computeReflectScore(){
+  const likertPts = state.reflectLikert.filter(v=>v!==null).length * (40/LIKERT_ITEMS.length);
+  const openPts = state.reflectOpen.filter(v=>v.trim().length>=10).length * (60/OPEN_ITEMS.length);
+  return {pct: Math.round(likertPts+openPts)};
+}
+function computeOverall(show, learn, apply, reflect){
+  return Math.round(show.pct*0.15 + learn.pct*0.35 + apply.pct*0.35 + reflect.pct*0.15);
+}
+function computeLevel(overall){
+  if(overall>=85) return {num:4, name:"ระดับ 4 · Advanced (ขั้นสูง)"};
+  if(overall>=70) return {num:3, name:"ระดับ 3 · Proficient (ชำนาญ)"};
+  if(overall>=50) return {num:2, name:"ระดับ 2 · Basic (พื้นฐาน)"};
+  return {num:1, name:"ระดับ 1 · Needs Improvement (ควรปรับปรุง)"};
+}
+
+/* =========================================================
+   Submission
+   ========================================================= */
+function submitTest(){
+  state.submitted = true;
+  go("report");
+}
+
+function buildReportStrings(show, learn, apply, reflect, overall, level){
+  return {
+    showReport: `SHOW: ตอบถูก ${show.correct}/${show.total} ข้อ (${show.pct}%)`,
+    learnReport: `LEARN: ตอบถูก ${learn.correct}/${learn.total} ข้อ (${learn.pct}%)`,
+    applyReport: `APPLY: ความแม่นยำเฉลี่ย ${apply.pct}% (กิจกรรม 1-${apply.perActivity.length}: ${apply.perActivity.join(", ")}%)`,
+    reflectReport: `REFLECT: ระดับความสมบูรณ์ของการประเมินตนเอง ${reflect.pct}%`,
+    overallReport: `คะแนนรวม ${overall}%`,
+    qualityReport: level.name
+  };
+}
+
+async function postResult(payload){
+  try{
+    const res = await fetch(WEBAPP_URL, {
+      method:"POST",
+      headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body: JSON.stringify(payload)
+    });
+    return {ok:true, text: await res.text()};
+  }catch(err){
+    return {ok:false, error: String(err)};
+  }
+}
+
+async function fetchHistory(name){
+  try{
+    const res = await fetch(WEBAPP_URL + "?action=history&name=" + encodeURIComponent(name));
+    const data = await res.json();
+    return {ok:true, rows: Array.isArray(data) ? data : (data.rows || [])};
+  }catch(err){
+    return {ok:false, error:String(err)};
+  }
+}
+
+/* ---------- Screen: REPORT ---------- */
+function renderReport(container){
+  const show = computeShowScore();
+  const learn = computeLearnScore();
+  const apply = computeApplyScore();
+  const reflect = computeReflectScore();
+  const overall = computeOverall(show, learn, apply, reflect);
+  const level = computeLevel(overall);
+  const strings = buildReportStrings(show, learn, apply, reflect, overall, level);
+
+  const levelColor = {4:"#2FD98A", 3:"#6C8CFF", 2:"#F5A93B", 1:"#E4576B"}[level.num];
+
+  const banner = el("div","level-banner");
+  banner.style.borderColor = levelColor;
+  banner.innerHTML = `<div class="lv-num" style="color:${levelColor}">${level.num}</div><div class="lv-name">${level.name}</div><div style="margin-top:10px; color:#8C9AC0; font-size:14px;">คะแนนรวม ${overall}%</div>`;
+  container.appendChild(banner);
+
+  const card = el("div","card");
+  card.innerHTML = `<div class="eyebrow-tag">รายงานผลการทำแบบทดสอบ</div><h2>สรุปผล 4 ด้าน — ${state.name} (${state.grade})</h2>`;
+  const grid = el("div","score-grid");
+  const items = [
+    {name:"SHOW · แสดงสิ่งที่รู้", pct:show.pct, detail:show.correct+"/"+show.total+" ข้อ"},
+    {name:"LEARN · เรียนรู้", pct:learn.pct, detail:learn.correct+"/"+learn.total+" ข้อ"},
+    {name:"APPLY · ประยุกต์ใช้", pct:apply.pct, detail:"เฉลี่ย "+APPLY_ACTIVITIES.length+" กิจกรรม"},
+    {name:"REFLECT · ประเมินตนเอง", pct:reflect.pct, detail:"ความสมบูรณ์"}
+  ];
+  items.forEach(it=>{
+    const sc = el("div","score-card");
+    sc.innerHTML = `<div class="sc-name">${it.name}</div><div class="sc-val" style="color:${it.pct>=70?'#2FD98A':it.pct>=50?'#F5A93B':'#E4576B'}">${it.pct}%</div><div style="font-size:12px;color:#5B6889;margin-top:4px;">${it.detail}</div>`;
+    grid.appendChild(sc);
+  });
+  card.appendChild(grid);
+
+  const chartDiv = el("div","chartwrap");
+  card.appendChild(chartDiv);
+  container.appendChild(card);
+
+  safeChart(chartDiv, (canvas)=> new Chart(canvas.getContext("2d"), {
+    type:"bar",
+    data:{ labels: items.map(i=>i.name.split(" · ")[0]),
+      datasets:[{ label:"คะแนน (%)", data: items.map(i=>i.pct),
+        backgroundColor:["#6C8CFF","#6C8CFF","#6C8CFF","#6C8CFF"] }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{ y:{min:0,max:100, ticks:{color:"#8C9AC0"}, grid:{color:"rgba(255,255,255,0.06)"}}, x:{ticks:{color:"#8C9AC0"}, grid:{display:false}} } }
+  }));
+
+  const applyDetail = el("div","card tight");
+  applyDetail.innerHTML = `<h3>รายละเอียดความแม่นยำ APPLY แต่ละกิจกรรม</h3>` +
+    APPLY_ACTIVITIES.map((a,i)=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-soft);font-size:13.5px;"><span style="color:var(--muted);">${a.title}</span><span class="mono" style="color:${state.applyAccuracy[i]===100?'#2FD98A':'#F5A93B'};font-weight:600;">${state.applyAccuracy[i]}%</span></div>`).join("");
+  container.appendChild(applyDetail);
+
+  const histCard = el("div","card tight");
+  histCard.innerHTML = `<h3>ประวัติการทำแบบทดสอบของ ${state.name}</h3><div id="hist-holder"><p style="font-size:13px;">กำลังโหลดประวัติ...</p></div><div class="save-status" id="save-status">กำลังบันทึกผลลง Google Sheet...</div>`;
+  container.appendChild(histCard);
+
+  const retryRow = el("div","btnrow");
+  retryRow.style.justifyContent = "center";
+  const retryBtn = el("button","btn","↻ ทำแบบทดสอบอีกครั้ง");
+  retryBtn.addEventListener("click", restartTest);
+  retryRow.appendChild(retryBtn);
+  container.appendChild(retryRow);
+
+  if(!state.posted){
+    state.posted = true;
+    const payload = {
+      timestamp: new Date().toISOString(),
+      name: state.name,
+      grade: state.grade,
+      showReport: strings.showReport,
+      learnReport: strings.learnReport,
+      applyReport: strings.applyReport,
+      reflectReport: strings.reflectReport,
+      overallReport: strings.overallReport,
+      qualityReport: strings.qualityReport
+    };
+    postResult(payload).then(res=>{
+      const statusEl = document.getElementById("save-status");
+      if(statusEl) statusEl.textContent = res.ok ? "บันทึกผลเรียบร้อยแล้ว" : "ไม่สามารถบันทึกผลได้ในขณะนี้ (โปรดตรวจสอบการเชื่อมต่อเครือข่าย)";
+    });
+    fetchHistory(state.name).then(res=>{
+      const holder = document.getElementById("hist-holder");
+      if(!holder) return;
+      if(!res.ok || !res.rows || res.rows.length===0){
+        holder.innerHTML = `<p style="font-size:13px;">ยังไม่มีประวัติก่อนหน้าของนักเรียนคนนี้</p>`;
+        return;
+      }
+      let html = `<table class="hist-table"><tr><th>เวลา</th><th>คะแนนรวม</th><th>ระดับ</th></tr>`;
+      res.rows.forEach(r=>{
+        html += `<tr><td>${r.timestamp||""}</td><td>${r.overallReport||""}</td><td>${r.qualityReport||""}</td></tr>`;
+      });
+      html += `</table>`;
+      holder.innerHTML = html;
+    });
+  }
+}
+
+/* =========================================================
+   Main render dispatcher
+   ========================================================= */
+function render(){
+  destroyCharts();
+  const container = document.getElementById("screen");
+  container.innerHTML = "";
+  renderChrome();
+  if(state.stage==="intro") renderIntro(container);
+  else if(state.stage==="show") renderShow(container);
+  else if(state.stage==="learn") renderLearn(container);
+  else if(state.stage==="apply") renderApply(container);
+  else if(state.stage==="reflect") renderReflect(container);
+  else if(state.stage==="report") renderReport(container);
+}
+
+render();
+/* Once Chart.js finishes loading (or exhausts its fallback CDNs), re-render
+   the current screen so any charts that showed the "couldn't load" notice
+   get drawn properly, without disrupting whatever the person was doing. */
+window.__chartJsLoad.then(()=>{ render(); });
+</script>
+</body>
+</html>
